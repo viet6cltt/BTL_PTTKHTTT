@@ -31,7 +31,7 @@ public class AuthExceptionHandler extends GlobalExceptionHandler {
 
     // 4. Trùng lặp tài khoản -> 409 Conflict
     public ResponseEntity<ErrorDetails> handleUserAlreadyExists(UserAlreadyExistsException ex) {
-        return buildResponse(ex.getMessage(), HttpStatus.CONFLICT)
+        return buildResponse(ex.getMessage(), HttpStatus.CONFLICT);
     }
 
 }
