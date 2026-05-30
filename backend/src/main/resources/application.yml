@@ -1,0 +1,27 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:logistics_db}}
+    username: ${SPRING_DATASOURCE_USERNAME:admin}
+    password: ${SPRING_DATASOURCE_PASSWORD:secret_password}
+
+  flyway:
+    enabled: true
+    url: ${spring.datasource.url}
+    user: ${spring.datasource.username}
+    password: ${spring.datasource.password}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://${MINIO_HOST:localhost}:${MINIO_PORT:9000}}
+  access-key: ${SPRING_MINIO_ACCESS_KEY:${MINIO_ROOT_USER:minio_admin}}
+  secret-key: ${SPRING_MINIO_SECRET_KEY:${MINIO_ROOT_PASSWORD:minio_secret_password}}
+  bucket-name: ${SPRING_MINIO_BUCKET:${MINIO_BUCKET_NAME:logistics-bucket}}
+
+server:
+  port: ${PORT:8080}

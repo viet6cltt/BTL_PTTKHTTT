@@ -1,4 +1,4 @@
 package com.training.logistics.auth.model;
 
-public class Roles {
+public class UserRole {
 }
