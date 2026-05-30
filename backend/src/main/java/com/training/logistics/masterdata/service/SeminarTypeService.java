@@ -8,6 +8,7 @@ import com.training.logistics.masterdata.model.SeminarType;
 import com.training.logistics.masterdata.repository.AvEquipmentRequirementRepository;
 import com.training.logistics.masterdata.repository.MaterialRequirementRepository;
 import com.training.logistics.masterdata.repository.SeminarTypeRepository;
+import com.training.logistics.seminar.repository.SeminarRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,15 +20,18 @@ public class SeminarTypeService {
     private final SeminarTypeRepository seminarTypeRepository;
     private final MaterialRequirementRepository materialRequirementRepository;
     private final AvEquipmentRequirementRepository avEquipmentRequirementRepository;
+    private final SeminarRepository seminarRepository;
 
     public SeminarTypeService(
             SeminarTypeRepository seminarTypeRepository,
             MaterialRequirementRepository materialRequirementRepository,
-            AvEquipmentRequirementRepository avEquipmentRequirementRepository
+            AvEquipmentRequirementRepository avEquipmentRequirementRepository,
+            SeminarRepository seminarRepository
     ) {
         this.seminarTypeRepository = seminarTypeRepository;
         this.materialRequirementRepository = materialRequirementRepository;
         this.avEquipmentRequirementRepository = avEquipmentRequirementRepository;
+        this.seminarRepository = seminarRepository;
     }
 
     @Transactional(readOnly = true)
@@ -58,8 +62,9 @@ public class SeminarTypeService {
     public void delete(Long id) {
         SeminarType seminarType = findEntity(id);
         if (materialRequirementRepository.existsBySeminarType_Id(id)
-                || avEquipmentRequirementRepository.existsBySeminarType_Id(id)) {
-            throw new ConflictException("Seminar type is still referenced by requirements");
+                || avEquipmentRequirementRepository.existsBySeminarType_Id(id)
+                || seminarRepository.existsBySeminarType_Id(id)) {
+            throw new ConflictException("Seminar type is still referenced by requirements or seminars");
         }
         seminarTypeRepository.delete(seminarType);
     }
