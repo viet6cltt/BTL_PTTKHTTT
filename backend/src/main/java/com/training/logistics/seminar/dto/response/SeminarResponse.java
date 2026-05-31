@@ -17,6 +17,7 @@ public record SeminarResponse(
         LocalDate endDate,
         String city,
         Integer anticipatedRegistrants,
+        String note,
         LocalDate bookingCreatedDate
 ) {
 }

@@ -190,12 +190,12 @@ class MaterialRequestControllerIntegrationTest {
                 seminarType.id(),
                 consultant.id(),
                 bookingUserId,
-                employeeUserId,
                 "Controller Material Seminar " + suffix,
                 LocalDate.now().plusDays(3),
                 LocalDate.now().plusDays(4),
                 "Hanoi",
-                anticipatedRegistrants
+                anticipatedRegistrants,
+                null
         ));
         return new ReferenceData(seminarType, seminar, employeeUserId);
     }

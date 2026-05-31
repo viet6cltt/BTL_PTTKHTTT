@@ -1,6 +1,7 @@
 package com.training.logistics.seminar.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -82,7 +83,9 @@ class SeminarControllerIntegrationTest {
                 .andExpect(jsonPath("$.seminarTypeName").value("Controller Course"))
                 .andExpect(jsonPath("$.consultantFullName").value("Controller Consultant"))
                 .andExpect(jsonPath("$.bookingDepartmentUserFullName").value("Controller Booking User"))
-                .andExpect(jsonPath("$.employeeFullName").value("Controller Coordinator"))
+                .andExpect(jsonPath("$.employeeId").value(nullValue()))
+                .andExpect(jsonPath("$.employeeFullName").value(nullValue()))
+                .andExpect(jsonPath("$.note").value("Controller note"))
                 .andExpect(jsonPath("$.seminarType").doesNotExist())
                 .andExpect(jsonPath("$.consultant").doesNotExist())
                 .andReturn()
@@ -160,17 +163,10 @@ class SeminarControllerIntegrationTest {
     private ReferenceData createReferenceData() {
         long suffix = System.nanoTime();
         Long bookingUserId = suffix;
-        Long employeeId = suffix + 1;
         userRepository.save(User.builder()
                 .id(bookingUserId)
                 .fullName("Controller Booking User")
                 .email("controller-booking-" + suffix + "@example.com")
-                .passwordHash("hash")
-                .build());
-        userRepository.save(User.builder()
-                .id(employeeId)
-                .fullName("Controller Coordinator")
-                .email("controller-coordinator-" + suffix + "@example.com")
                 .passwordHash("hash")
                 .build());
         SeminarTypeResponse seminarType = seminarTypeService.create(
@@ -179,7 +175,7 @@ class SeminarControllerIntegrationTest {
         ConsultantResponse consultant = consultantService.create(
                 new ConsultantRequest("Controller Consultant", "0901", "controller@example.com", null, "Hanoi", "Vietnam", "Trainer")
         );
-        return new ReferenceData(seminarType, consultant, bookingUserId, employeeId);
+        return new ReferenceData(seminarType, consultant, bookingUserId);
     }
 
     private String seminarBody(ReferenceData refs, int anticipatedRegistrants) {
@@ -188,18 +184,17 @@ class SeminarControllerIntegrationTest {
                   "seminarTypeId": %d,
                   "consultantId": %d,
                   "bookingDepartmentUserId": %d,
-                  "employeeId": %d,
                   "seminarName": "Controller Seminar",
                   "startDate": "2026-08-01",
                   "endDate": "2026-08-02",
                   "city": "Hanoi",
-                  "anticipatedRegistrants": %d
+                  "anticipatedRegistrants": %d,
+                  "note": "Controller note"
                 }
                 """.formatted(
                 refs.seminarType.id(),
                 refs.consultant.id(),
                 refs.bookingUserId,
-                refs.employeeId,
                 anticipatedRegistrants
         );
     }
@@ -213,8 +208,7 @@ class SeminarControllerIntegrationTest {
     private record ReferenceData(
             SeminarTypeResponse seminarType,
             ConsultantResponse consultant,
-            Long bookingUserId,
-            Long employeeId
+            Long bookingUserId
     ) {
     }
 }

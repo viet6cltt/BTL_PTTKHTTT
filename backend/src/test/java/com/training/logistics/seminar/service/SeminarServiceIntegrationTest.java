@@ -87,7 +87,9 @@ class SeminarServiceIntegrationTest {
         assertThat(seminar.seminarTypeName()).isEqualTo("Architecture");
         assertThat(seminar.consultantFullName()).isEqualTo("Consultant One");
         assertThat(seminar.bookingDepartmentUserFullName()).isEqualTo("Booking User");
-        assertThat(seminar.employeeFullName()).isEqualTo("Coordinator User");
+        assertThat(seminar.employeeId()).isNull();
+        assertThat(seminar.employeeFullName()).isNull();
+        assertThat(seminar.note()).isEqualTo("Prepare projector early");
 
         LocalDate bookingCreatedDate = seminar.bookingCreatedDate();
         SeminarResponse updated = seminarService.update(
@@ -100,13 +102,17 @@ class SeminarServiceIntegrationTest {
                         LocalDate.of(2026, 7, 11),
                         LocalDate.of(2026, 7, 12),
                         "Da Nang",
-                        42
+                        42,
+                        "Updated setup note"
                 )
         );
         assertThat(updated.bookingDepartmentUserId()).isEqualTo(refs.bookingUserId);
         assertThat(updated.bookingCreatedDate()).isEqualTo(bookingCreatedDate);
         assertThat(updated.seminarName()).isEqualTo("Updated Workshop");
         assertThat(updated.anticipatedRegistrants()).isEqualTo(42);
+        assertThat(updated.employeeId()).isEqualTo(refs.employeeId);
+        assertThat(updated.employeeFullName()).isEqualTo("Coordinator User");
+        assertThat(updated.note()).isEqualTo("Updated setup note");
 
         seminarService.delete(seminar.id());
         assertThatThrownBy(() -> seminarService.getById(seminar.id()))
@@ -117,16 +123,31 @@ class SeminarServiceIntegrationTest {
     void rejectsMissingReferences() {
         ReferenceData refs = createReferenceData();
 
-        assertThatThrownBy(() -> seminarService.create(createRequest(refs, 999L, refs.consultant.id(), refs.bookingUserId, refs.employeeId)))
+        assertThatThrownBy(() -> seminarService.create(createRequest(refs, 999L, refs.consultant.id(), refs.bookingUserId)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Seminar type not found");
-        assertThatThrownBy(() -> seminarService.create(createRequest(refs, refs.seminarType.id(), 999L, refs.bookingUserId, refs.employeeId)))
+        assertThatThrownBy(() -> seminarService.create(createRequest(refs, refs.seminarType.id(), 999L, refs.bookingUserId)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Consultant not found");
-        assertThatThrownBy(() -> seminarService.create(createRequest(refs, refs.seminarType.id(), refs.consultant.id(), 999L, refs.employeeId)))
+        assertThatThrownBy(() -> seminarService.create(createRequest(refs, refs.seminarType.id(), refs.consultant.id(), 999L)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Booking department user not found");
-        assertThatThrownBy(() -> seminarService.create(createRequest(refs, refs.seminarType.id(), refs.consultant.id(), refs.bookingUserId, 999L)))
+
+        SeminarResponse seminar = seminarService.create(createRequest(refs));
+        assertThatThrownBy(() -> seminarService.update(
+                seminar.id(),
+                new SeminarUpdateRequest(
+                        refs.seminarType.id(),
+                        refs.consultant.id(),
+                        999L,
+                        "Updated Workshop",
+                        LocalDate.of(2026, 7, 11),
+                        LocalDate.of(2026, 7, 12),
+                        "Da Nang",
+                        42,
+                        null
+                )
+        ))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Employee not found");
     }
@@ -139,24 +160,24 @@ class SeminarServiceIntegrationTest {
                 refs.seminarType.id(),
                 refs.consultant.id(),
                 refs.bookingUserId,
-                refs.employeeId,
                 "Invalid Date Seminar",
                 LocalDate.of(2026, 7, 12),
                 LocalDate.of(2026, 7, 11),
                 "Hanoi",
-                20
+                20,
+                null
         ))).isInstanceOf(BadRequestException.class);
 
         assertThatThrownBy(() -> seminarService.create(new SeminarCreateRequest(
                 refs.seminarType.id(),
                 refs.consultant.id(),
                 refs.bookingUserId,
-                refs.employeeId,
                 "Invalid Count Seminar",
                 LocalDate.of(2026, 7, 11),
                 LocalDate.of(2026, 7, 12),
                 "Hanoi",
-                0
+                0,
+                null
         ))).isInstanceOf(BadRequestException.class);
     }
 
@@ -255,17 +276,16 @@ class SeminarServiceIntegrationTest {
     }
 
     private SeminarCreateRequest createRequest(ReferenceData refs, int anticipatedRegistrants) {
-        return createRequest(refs, refs.seminarType.id(), refs.consultant.id(), refs.bookingUserId, refs.employeeId, anticipatedRegistrants);
+        return createRequest(refs, refs.seminarType.id(), refs.consultant.id(), refs.bookingUserId, anticipatedRegistrants);
     }
 
     private SeminarCreateRequest createRequest(
             ReferenceData refs,
             Long seminarTypeId,
             Long consultantId,
-            Long bookingUserId,
-            Long employeeId
+            Long bookingUserId
     ) {
-        return createRequest(refs, seminarTypeId, consultantId, bookingUserId, employeeId, 25);
+        return createRequest(refs, seminarTypeId, consultantId, bookingUserId, 25);
     }
 
     private SeminarCreateRequest createRequest(
@@ -273,19 +293,18 @@ class SeminarServiceIntegrationTest {
             Long seminarTypeId,
             Long consultantId,
             Long bookingUserId,
-            Long employeeId,
             int anticipatedRegistrants
     ) {
         return new SeminarCreateRequest(
                 seminarTypeId,
                 consultantId,
                 bookingUserId,
-                employeeId,
                 "Architecture Workshop",
                 LocalDate.of(2026, 7, 10),
                 LocalDate.of(2026, 7, 11),
                 "Ho Chi Minh City",
-                anticipatedRegistrants
+                anticipatedRegistrants,
+                " Prepare projector early "
         );
     }
 

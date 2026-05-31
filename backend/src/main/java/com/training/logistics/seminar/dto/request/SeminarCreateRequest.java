@@ -9,11 +9,11 @@ public record SeminarCreateRequest(
         @NotNull Long seminarTypeId,
         @NotNull Long consultantId,
         @NotNull Long bookingDepartmentUserId,
-        @NotNull Long employeeId,
         @NotBlank String seminarName,
         @NotNull LocalDate startDate,
         @NotNull LocalDate endDate,
         @NotBlank String city,
-        @NotNull @Positive Integer anticipatedRegistrants
+        @NotNull @Positive Integer anticipatedRegistrants,
+        String note
 ) {
 }
