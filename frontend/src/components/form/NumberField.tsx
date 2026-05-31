@@ -7,6 +7,7 @@ export function NumberField({ id, label, placeholder, required }: FieldProps) {
     <FieldShell id={id} label={label} required={required}>
       <input
         id={id}
+        name={id}
         min="1"
         type="number"
         placeholder={placeholder}

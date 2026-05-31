@@ -8,6 +8,7 @@ export function CityField() {
       <div className="relative">
         <input
           id="city"
+          name="city"
           type="text"
           placeholder="Nhập và chọn thành phố"
           className={baseInputClass('pr-12')}

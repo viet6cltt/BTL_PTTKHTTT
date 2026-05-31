@@ -5,6 +5,8 @@ import { FieldShell } from './FieldShell'
 
 type SelectFieldProps = FieldProps & {
   options: SelectOption[]
+  value?: string
+  onChange?: (value: string) => void
 }
 
 export function SelectField({
@@ -13,15 +15,25 @@ export function SelectField({
   placeholder,
   required,
   options,
+  value,
+  onChange,
 }: SelectFieldProps) {
+  const selectedValue = value ?? ''
+
   return (
     <FieldShell id={id} label={label} required={required}>
       <div className="relative">
         <select
           id={id}
-          defaultValue=""
+          name={id}
+          value={selectedValue}
+          onChange={(event) => onChange?.(event.target.value)}
           aria-label={placeholder}
-          className={baseInputClass('appearance-none pr-11 text-slate-400')}
+          className={baseInputClass(
+            `appearance-none pr-11 ${
+              selectedValue ? 'text-[#18395F]' : 'text-slate-400'
+            }`,
+          )}
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>

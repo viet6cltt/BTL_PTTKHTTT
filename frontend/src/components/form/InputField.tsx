@@ -7,6 +7,7 @@ export function InputField({ id, label, placeholder, required }: FieldProps) {
     <FieldShell id={id} label={label} required={required}>
       <input
         id={id}
+        name={id}
         type="text"
         placeholder={placeholder}
         className={baseInputClass()}

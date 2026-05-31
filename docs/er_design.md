@@ -27,7 +27,8 @@ Lưu thông tin về một seminar cụ thể đã được lên lịch do Booki
 | city | Thành phố nơi seminar được tổ chức |  |
 | anticipated\_registrants | Số lượng người tham dự dự kiến. |  |
 | booking\_created\_date | Ngày booking department tạo lịch seminar. |  |
-| employee\_id |  | FK tới EMPLOYEE |
+| note | Ghi chú thêm cho seminar |  |
+| employee\_id | Nhân viên phụ trách, được gán khi tạo draft contract | FK tới EMPLOYEE, NULL khi mới tạo seminar |
 
 **CONSULTANT**
 
@@ -75,6 +76,14 @@ Lưu thông tin hợp đồng/thoả thuận đặt facility cho mỗi seminar.
 | contract\_created\_date | Ngày tạo hợp đồng | NULL nếu chưa SIGNED |
 | status | Trạng thái hợp đồng | NOTSIGNED/SIGNED |
 | total\_cost | Giá chốt với facility | NULL nếu chưa SIGNED |
+
+TODO khi triển khai Contract module:
+
+- Khi coordinator tạo draft contract cho một seminar, hệ thống phải gán `SEMINAR.employee_id` bằng ID của user đang đăng nhập.
+- Việc tạo draft contract và gán `employee_id` phải nằm trong cùng transaction để tránh contract được tạo nhưng seminar chưa được nhận phụ trách.
+- Không nhận `employee_id` từ frontend cho thao tác tạo draft contract; backend phải lấy từ authenticated user.
+- Nếu seminar đã có `employee_id`, cần kiểm tra rule nghiệp vụ: cho phép cùng employee tiếp tục chỉnh sửa, hoặc trả `409 Conflict` nếu employee khác tạo draft contract.
+- Cần kiểm soát để một seminar không có nhiều draft contract active ngoài ý muốn.
 
 **CONTRACT\_DOCUMENT**
 
@@ -157,22 +166,36 @@ Lưu danh sách vật tư cần cho từng loại seminar.
 
 **MATERIAL\_REQUEST**
 
-Lưu yêu cầu gửi vật tư cho một seminar cụ thể.
+Lưu phần thông tin chung của một yêu cầu gửi vật tư cho một seminar cụ thể.
 
-Yêu cầu chỉ có thể được tạo và lưu khi contract được ký
+Trong phiên bản hiện tại, Contract chưa được triển khai nên yêu cầu vật tư liên kết trực tiếp với SEMINAR. Sau khi SEMINAR\_FACILITY\_CONTRACT được triển khai, contract\_id sẽ được dùng để liên kết tới hợp đồng đã ký, đồng thời vẫn giữ seminar\_id để truy vấn và kiểm tra tính nhất quán.
+
+Một yêu cầu vật tư có thể gồm nhiều dòng vật tư trong MATERIAL\_REQUEST\_ITEM.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| request\_id |  | PK |
-| material\_id |  | FK đến MATERIAL |
-| contract\_id |  | FK đến SEMINAR\_FACILITY\_CONTRACT |
-| requested\_quantity | Số lượng vật tư được yêu cầu gửi |  |
+| material\_request\_id |  | PK |
+| seminar\_id |  | FK tới SEMINAR |
+| contract\_id |  | FK tới SEMINAR\_FACILITY\_CONTRACT sau khi Contract được triển khai; NULL trong phiên bản hiện tại |
 | request\_date | Ngày tạo yêu cầu vật tư |  |
-| needed\_by\_date | Ngày cần nhận vật tư tại facility | Sau request\_date |
-| ship\_to\_address | Địa chỉ gửi vật tư |  |
-| shipping\_date | Ngày vật tư được gửi đi. |  |
-| shipment\_status |  | Requested/Packed/Shipped/Delivered. |
+| needed\_by\_date | Ngày cần nhận vật tư tại facility | Sau hoặc bằng request\_date |
+| shipment\_status | Trạng thái vận chuyển | REQUESTED/PACKED/SHIPPED/DELIVERED |
+| delivered\_confirmed\_at | Thời điểm coordinator xác nhận đã nhận vật tư | NULL nếu chưa DELIVERED |
+| delivery\_confirmation\_note | Ghi chú khi xác nhận đã nhận vật tư |  |
 | notes | Ghi chú thêm về yêu cầu hoặc shipment |  |
+| created\_at | Thời điểm bản ghi được tạo |  |
+| updated\_at | Thời điểm bản ghi được cập nhật gần nhất |  |
+
+**MATERIAL\_REQUEST\_ITEM**
+
+Lưu từng dòng vật tư trong một yêu cầu gửi vật tư.
+
+| Attribute | Mô tả | Ràng buộc |
+| :---- | :---- | :---- |
+| material\_request\_id |  | PK, FK tới MATERIAL\_REQUEST |
+| material\_id |  | PK, FK tới MATERIAL |
+| requested\_quantity | Số lượng vật tư được yêu cầu gửi | \>0 |
+| notes | Ghi chú thêm cho dòng vật tư |  |
 
 **AUDIO\_VISUAL\_EQUIPMENT**
 
@@ -219,4 +242,3 @@ Lưu các nhân viên trong bộ phận tổ chức.
 | email | Email của nhân viên |  |
 | phone | SĐT của nhân viên |  |
 | role | Chức danh |  |
-

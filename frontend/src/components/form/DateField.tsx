@@ -9,7 +9,8 @@ export function DateField({ id, label, placeholder, required }: FieldProps) {
       <div className="relative">
         <input
           id={id}
-          type="text"
+          name={id}
+          type="date"
           placeholder={placeholder}
           className={baseInputClass('pr-12')}
         />
