@@ -57,6 +57,19 @@ public class MinioStorageService {
         return normalizedEndpoint + "/" + bucketName + "/" + objectName;
     }
 
+    public String extractObjectName(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) {
+            return null;
+        }
+
+        String bucketPrefix = "/" + bucketName + "/";
+        int bucketIndex = fileUrl.indexOf(bucketPrefix);
+        if (bucketIndex < 0) {
+            return null;
+        }
+        return fileUrl.substring(bucketIndex + bucketPrefix.length());
+    }
+
     public InputStream downloadFile(String objectName) {
         try {
             ensureBucketExists();

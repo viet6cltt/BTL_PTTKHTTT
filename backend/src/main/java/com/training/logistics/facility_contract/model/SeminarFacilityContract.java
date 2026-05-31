@@ -67,4 +67,8 @@ public class SeminarFacilityContract {
     @Builder.Default
     @OneToMany(mappedBy = "contract", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AvEquipmentReservation> avReservations = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "contract", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FacilityRoomReservation> roomReservations = new ArrayList<>();
 }

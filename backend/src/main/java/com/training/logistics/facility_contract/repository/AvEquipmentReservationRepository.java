@@ -8,4 +8,6 @@ import java.util.List;
 
 public interface AvEquipmentReservationRepository extends JpaRepository<AvEquipmentReservation, AvEquipmentReservationId> {
     List<AvEquipmentReservation> findByContractContractId(Long contractId);
+
+    void deleteByContractContractId(Long contractId);
 }
