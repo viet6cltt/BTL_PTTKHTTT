@@ -35,6 +35,8 @@ type FilterState = {
   seminarDateTo: string
 }
 
+type CoordinatorScope = 'ALL' | 'MINE' | 'UNASSIGNED'
+
 const defaultFilters: FilterState = {
   searchTerm: '',
   seminarTypeId: '',
@@ -57,6 +59,7 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
+  const [coordinatorScope, setCoordinatorScope] = useState<CoordinatorScope>('ALL')
   const [page, setPage] = useState(1)
 
   // Fetch seminars on mount
@@ -65,8 +68,13 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
       try {
         setIsLoading(true)
         setErrorMsg(null)
-        // Fetch a large page size to support rich client-side filters in-memory
-        const response = await api.getSeminars({ size: 1000 })
+        const response = await api.getSeminars({
+          size: 1000,
+          coordinatorId:
+            user?.role === 'LOGISTICS_COORDINATOR' && coordinatorScope === 'MINE'
+              ? user.userId
+              : undefined,
+        })
         setSeminarRows(response.content || [])
       } catch (err: any) {
         setErrorMsg(err.message || 'Không thể tải danh sách seminar. Vui lòng kiểm tra kết nối.')
@@ -75,7 +83,25 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
       }
     }
     loadSeminars()
-  }, [])
+  }, [coordinatorScope, user?.role, user?.userId])
+
+  async function handleClaim(seminarId: number) {
+    if (!user) return
+    try {
+      setErrorMsg(null)
+      setIsLoading(true)
+      await api.assignCoordinator(seminarId, user.userId)
+      const response = await api.getSeminars({
+        size: 1000,
+        coordinatorId: coordinatorScope === 'MINE' ? user.userId : undefined,
+      })
+      setSeminarRows(response.content || [])
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi nhận nhiệm vụ.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const seminarTypeOptions = useMemo(
     () =>
@@ -101,8 +127,13 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
   ]
 
   const filteredSeminars = useMemo(
-    () => seminarRows.filter((seminar) => matchesFilters(seminar, filters)),
-    [seminarRows, filters],
+    () =>
+      seminarRows.filter(
+        (seminar) =>
+          matchesCoordinatorScope(seminar, coordinatorScope, user?.userId) &&
+          matchesFilters(seminar, filters),
+      ),
+    [seminarRows, filters, coordinatorScope, user?.userId],
   )
 
   const totalPages = Math.max(1, Math.ceil(filteredSeminars.length / PAGE_SIZE))
@@ -214,6 +245,40 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
         </div>
       </FilterPanel>
 
+      {user?.role === 'LOGISTICS_COORDINATOR' && (
+        <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-sm font-black text-[#092F5A]">Góc điều phối seminar</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Lọc nhanh các seminar đang cần nhận hoặc seminar đã được giao cho bạn.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-100 p-1 text-xs font-black">
+            {[
+              { value: 'ALL', label: 'Tất cả' },
+              { value: 'MINE', label: 'Của tôi' },
+              { value: 'UNASSIGNED', label: 'Chưa nhận' },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setCoordinatorScope(option.value as CoordinatorScope)
+                  setPage(1)
+                }}
+                className={`rounded-lg px-3 py-2 transition ${
+                  coordinatorScope === option.value
+                    ? 'bg-[#0B3970] text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-white hover:text-[#0B3970]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className={`${cardClass} overflow-hidden`}>
         <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 md:flex-row md:items-center md:justify-between">
           <div>
@@ -242,7 +307,11 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
                   <th className={tableCellClass}>Thành phố</th>
                   <th className={tableCellClass}>Thời gian tổ chức</th>
                   <th className={`${tableCellClass} text-right`}>Số HV dự kiến</th>
+                  <th className={tableCellClass}>Điều phối</th>
                   <th className={`${tableCellClass} text-center`}>Trạng thái</th>
+                  {user?.role === 'LOGISTICS_COORDINATOR' && (
+                    <th className={`${tableCellClass} text-center`}>Thao tác</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -252,11 +321,12 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
                       key={seminar.id}
                       seminar={seminar}
                       onClick={() => onSelectSeminar(seminar.id)}
+                      onClaim={handleClaim}
                     />
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={user?.role === 'LOGISTICS_COORDINATOR' ? 9 : 8}>
                       <EmptyState />
                     </td>
                   </tr>
@@ -279,9 +349,12 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
 type SeminarRowProps = {
   seminar: SeminarResponse
   onClick: () => void
+  onClaim: (id: number) => void
 }
 
-function SeminarRow({ seminar, onClick }: SeminarRowProps) {
+function SeminarRow({ seminar, onClick, onClaim }: SeminarRowProps) {
+  const { user } = useAuth()
+
   // Format state styling beautifully
   const statusLabels: Record<string, string> = {
     PENDING_LOGISTICS: 'Chờ điều phối',
@@ -324,11 +397,30 @@ function SeminarRow({ seminar, onClick }: SeminarRowProps) {
       <td className={`${tableCellClass} text-right text-sm font-extrabold text-[#0B3970]`}>
         {seminar.anticipatedRegistrants}
       </td>
+      <td className={`${tableCellClass} text-sm font-semibold text-slate-600`}>
+        {seminar.coordinatorFullName || (
+          <span className="font-bold text-amber-600">Chưa nhận</span>
+        )}
+      </td>
       <td className={`${tableCellClass} text-center`}>
         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black tracking-wide uppercase ${statusStyles[seminar.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
           {statusLabels[seminar.status] || seminar.status}
         </span>
       </td>
+      {user?.role === 'LOGISTICS_COORDINATOR' && (
+        <td className={`${tableCellClass} text-center`} onClick={(e) => e.stopPropagation()}>
+          {seminar.coordinatorId === null && seminar.status === 'PENDING_LOGISTICS' ? (
+            <button
+              onClick={() => onClaim(seminar.id)}
+              className="px-3.5 py-1.5 text-[11px] font-black uppercase text-white bg-[#0B3970] rounded-xl hover:bg-[#18395F] transition shadow-md shadow-slate-900/10 cursor-pointer"
+            >
+              Nhận việc
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400 font-bold">--</span>
+          )}
+        </td>
+      )}
     </tr>
   )
 }
@@ -471,6 +563,22 @@ function matchesFilters(seminar: SeminarResponse, filters: FilterState) {
       seminar.startDate >= filters.seminarDateFrom) &&
     (!filters.seminarDateTo || seminar.endDate <= filters.seminarDateTo)
   )
+}
+
+function matchesCoordinatorScope(
+  seminar: SeminarResponse,
+  scope: CoordinatorScope,
+  currentUserId?: number,
+) {
+  if (scope === 'MINE') {
+    return seminar.coordinatorId === currentUserId
+  }
+
+  if (scope === 'UNASSIGNED') {
+    return seminar.coordinatorId === null && seminar.status === 'PENDING_LOGISTICS'
+  }
+
+  return true
 }
 
 function normalizeText(value: string) {

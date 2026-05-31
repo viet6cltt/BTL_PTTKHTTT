@@ -6,11 +6,14 @@ import com.training.logistics.facility_contract.dto.RejectFacilityContractReques
 import com.training.logistics.facility_contract.exception.DuplicateFacilityContractException;
 import com.training.logistics.facility_contract.exception.FacilityContractNotFoundException;
 import com.training.logistics.facility_contract.exception.InvalidFacilityContractRequestException;
+import com.training.logistics.facility_contract.external.MasterDataClient;
 import com.training.logistics.facility_contract.external.SeminarClient;
 import com.training.logistics.facility_contract.mapper.FacilityContractMapper;
 import com.training.logistics.facility_contract.model.ContractStatus;
 import com.training.logistics.facility_contract.model.Facility;
+import com.training.logistics.facility_contract.model.FacilityRoomReservation;
 import com.training.logistics.facility_contract.model.SeminarFacilityContract;
+import com.training.logistics.facility_contract.repository.FacilityRoomReservationRepository;
 import com.training.logistics.facility_contract.repository.SeminarFacilityContractRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -32,7 +36,9 @@ public class FacilityContractService {
     private final SeminarFacilityContractRepository contractRepository;
     private final FacilityService facilityService;
     private final SeminarClient seminarClient;
+    private final MasterDataClient masterDataClient;
     private final MinioStorageService minioStorageService;
+    private final FacilityRoomReservationRepository roomReservationRepository;
 
     @Transactional
     public FacilityContractResponse createContract(CreateFacilityContractRequest request) {
@@ -71,6 +77,7 @@ public class FacilityContractService {
         if (contract.getStatus() != ContractStatus.PENDING_NEGOTIATE) {
             throw new InvalidFacilityContractRequestException("Only PENDING_NEGOTIATE contracts can be approved");
         }
+        validateReservedRoomsCoverRegistrants(contract);
 
         String objectName = "contracts/" + contractId + "/" + System.currentTimeMillis() + "_" + safeFilename(file.getOriginalFilename());
         String fileUrl = minioStorageService.uploadFile(objectName, file);
@@ -100,6 +107,25 @@ public class FacilityContractService {
     public SeminarFacilityContract findContract(Long contractId) {
         return contractRepository.findById(contractId)
                 .orElseThrow(() -> new FacilityContractNotFoundException("Facility contract not found"));
+    }
+
+    private void validateReservedRoomsCoverRegistrants(SeminarFacilityContract contract) {
+        Optional<Integer> anticipatedRegistrants = masterDataClient.getAnticipatedRegistrants(contract.getSeminarId());
+        if (anticipatedRegistrants.isEmpty()) {
+            return;
+        }
+
+        int totalSeats = roomReservationRepository.findByContractContractId(contract.getContractId()).stream()
+                .map(FacilityRoomReservation::getNumSeats)
+                .filter(seats -> seats != null && seats >= 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        if (totalSeats < anticipatedRegistrants.get()) {
+            throw new InvalidFacilityContractRequestException(
+                    "Total reserved room seats must cover anticipated registrants: " + anticipatedRegistrants.get()
+            );
+        }
     }
 
     private String safeFilename(String originalFilename) {
