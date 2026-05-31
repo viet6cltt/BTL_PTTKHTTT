@@ -22,12 +22,8 @@ public class FacilityCreateRequest {
     @Size(max = 100)
     private String city;
 
-    @Size(max = 20)
-    private String phone;
-
-    @Email
-    @Size(max = 150)
-    private String email;
+    @Min(1)
+    private Integer maxCapacity;
 
     @Size(max = 100)
     private String salesManagerName;

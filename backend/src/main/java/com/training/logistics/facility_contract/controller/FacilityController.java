@@ -2,13 +2,14 @@ package com.training.logistics.facility_contract.controller;
 
 import com.training.logistics.facility_contract.dto.FacilityCreateRequest;
 import com.training.logistics.facility_contract.dto.FacilityResponse;
+import com.training.logistics.facility_contract.dto.FacilitySearchRequest;
 import com.training.logistics.facility_contract.service.FacilityService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,52 +19,50 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import java.time.LocalDate;
 
 @RestController
-@RequestMapping("/api/facility-contract/facilities")
+@RequestMapping("/api/v1/facilities")
 @RequiredArgsConstructor
 public class FacilityController {
     private final FacilityService facilityService;
 
+    @GetMapping
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    public ResponseEntity<Page<FacilityResponse>> searchFacilities(
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) Integer capacity,
+            @RequestParam(required = false) LocalDate date,
+            @RequestParam(required = false) String timeSlot,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        FacilitySearchRequest request = new FacilitySearchRequest();
+        request.setCity(city);
+        request.setCapacity(capacity);
+        request.setDate(date);
+        request.setTimeSlot(timeSlot);
+        request.setPage(page);
+        request.setSize(size);
+        return ResponseEntity.ok(facilityService.searchFacilities(request));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    public ResponseEntity<FacilityResponse> getFacilityById(@PathVariable Long id) {
+        return ResponseEntity.ok(facilityService.getFacilityById(id));
+    }
+
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
     public ResponseEntity<FacilityResponse> createFacility(@Valid @RequestBody FacilityCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(facilityService.createFacility(request));
     }
 
-    @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR')")
-    public ResponseEntity<List<FacilityResponse>> getAllFacilities() {
-        return ResponseEntity.ok(facilityService.getAllFacilities());
-    }
-
-    @GetMapping("/{facilityId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR')")
-    public ResponseEntity<FacilityResponse> getFacilityById(@PathVariable Long facilityId) {
-        return ResponseEntity.ok(facilityService.getFacilityById(facilityId));
-    }
-
-    @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR')")
-    public ResponseEntity<List<FacilityResponse>> searchFacilities(
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) String name) {
-        return ResponseEntity.ok(facilityService.searchFacilities(city, name));
-    }
-
-    @PutMapping("/{facilityId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
     public ResponseEntity<FacilityResponse> updateFacility(
-            @PathVariable Long facilityId,
+            @PathVariable Long id,
             @Valid @RequestBody FacilityCreateRequest request) {
-        return ResponseEntity.ok(facilityService.updateFacility(facilityId, request));
-    }
-
-    @DeleteMapping("/{facilityId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR')")
-    public ResponseEntity<Void> deleteFacility(@PathVariable Long facilityId) {
-        facilityService.deleteFacility(facilityId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(facilityService.updateFacility(id, request));
     }
 }

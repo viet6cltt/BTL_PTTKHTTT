@@ -3,10 +3,11 @@ package com.training.logistics.facility_contract.dto;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.math.BigDecimal;
-
 @Data
-public class SignContractRequest {
+public class CreateFacilityContractRequest {
     @NotNull
-    private BigDecimal totalCost;
+    private Long seminarId;
+
+    @NotNull
+    private Long facilityId;
 }

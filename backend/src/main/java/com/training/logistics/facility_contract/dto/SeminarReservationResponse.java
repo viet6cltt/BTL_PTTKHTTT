@@ -5,22 +5,18 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 @Data
 @AllArgsConstructor
-public class FinalContractSummaryResponse {
-    private Long contractId;
+public class SeminarReservationResponse {
     private Long seminarId;
+    private Long contractId;
     private String facilityName;
     private String facilityAddress;
-    private String salesManagerName;
-    private LocalDate reservationDate;
-    private LocalDate contractCreatedDate;
-    private ContractStatus status;
+    private ContractStatus contractStatus;
+    private String contractDocPath;
     private BigDecimal totalCost;
-    private String documentUrl;
+    private List<AvEquipmentReservationResponse> avEquipments;
     private List<RoomReservationResponse> roomReservations;
-    private List<AvEquipmentReservationResponse> avReservations;
 }

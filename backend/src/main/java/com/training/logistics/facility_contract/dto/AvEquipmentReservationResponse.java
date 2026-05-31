@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 public class AvEquipmentReservationResponse {
     private Long contractId;
     private Long equipmentId;
-    private String equipmentName;
     private Integer quantityReserved;
     private BigDecimal costForEachEquipment;
 }
