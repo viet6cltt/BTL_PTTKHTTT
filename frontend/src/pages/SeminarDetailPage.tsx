@@ -67,7 +67,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   const [isCreatingFacility, setIsCreatingFacility] = useState(false)
   const [isCompletingVenue, setIsCompletingVenue] = useState(false)
   const [showFacilityForm, setShowFacilityForm] = useState(false)
-  
+
   // Form fields
   const [scannedFile, setScannedFile] = useState<File | null>(null)
   const [finalCost, setFinalCost] = useState<string>('')

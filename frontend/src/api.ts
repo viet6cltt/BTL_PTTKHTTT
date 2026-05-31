@@ -173,13 +173,6 @@ export interface FacilityResponse {
   costForEachDay: number
 }
 
-export interface AudioVisualEquipmentResponse {
-  id: number
-  equipmentName: string
-  equipmentType: string
-  unit: string
-}
-
 function getHeaders() {
   const token = localStorage.getItem('token')
   const headers: HeadersInit = {
@@ -230,7 +223,7 @@ export const api = {
     const params = new URLSearchParams()
     if (filters.status) params.append('status', filters.status)
     if (filters.city) params.append('city', filters.city)
-    if (filters.coordinatorId !== undefined) params.append('coordinatorId', String(filters.coordinatorId))
+    if (filters.coordinatorId) params.append('coordinatorId', String(filters.coordinatorId))
     if (filters.page !== undefined) params.append('page', String(filters.page))
     if (filters.size !== undefined) params.append('size', String(filters.size))
 
@@ -291,25 +284,6 @@ export const api = {
     return handleResponse<PageResponse<FacilityResponse>>(res)
   },
 
-  async createFacility(data: {
-    facilityName: string
-    address: string
-    city: string
-    maxCapacity: number
-    salesManagerName?: string
-    salesManagerPhone?: string
-    salesManagerEmail?: string
-    numberOfRoom?: number
-    costForEachDay?: number
-  }): Promise<FacilityResponse> {
-    const res = await fetch(`${API_BASE_URL}/facilities`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(data),
-    })
-    return handleResponse<FacilityResponse>(res)
-  },
-
   async createContract(seminarId: number, facilityId: number): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/facility-contracts`, {
       method: 'POST',
@@ -357,7 +331,7 @@ export const api = {
 
   async saveAvEquipmentReservations(data: {
     contractId: number
-    equipments: { equipmentId: number; quantityReserved: number; costForEachEquipment: number }[]
+    equipmentReservations: { equipmentId: number; quantityReserved: number; costForEachEquipment: number }[]
   }): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/reservations/av-equipment`, {
       method: 'POST',
@@ -380,29 +354,6 @@ export const api = {
       body: formData,
     })
     return handleResponse<any>(res)
-  },
-
-  async updateRoomReservation(roomReservationId: number, formData: FormData): Promise<RoomReservation> {
-    const token = localStorage.getItem('token')
-    const headers: HeadersInit = {}
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    const res = await fetch(`${API_BASE_URL}/reservations/rooms/${roomReservationId}`, {
-      method: 'PUT',
-      headers,
-      body: formData,
-    })
-    return handleResponse<RoomReservation>(res)
-  },
-
-  async deleteRoomReservation(roomReservationId: number): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/reservations/rooms/${roomReservationId}`, {
-      method: 'DELETE',
-      headers: getHeaders(),
-    })
-    return handleResponse<void>(res)
   },
 
   // Travel

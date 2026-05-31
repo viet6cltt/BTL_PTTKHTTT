@@ -1,15 +1,62 @@
-import { useEffect, useState } from 'react'
-import { api, TravelArrangementResponse } from '../api'
-import { CheckCircle2, Info, MapPin, Navigation, Plane, User } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  AlertCircle,
+  Banknote,
+  Building2,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  Info,
+  MapPin,
+  Navigation,
+  Plane,
+  RefreshCw,
+  Route,
+  TicketCheck,
+  User,
+  XCircle,
+} from 'lucide-react'
+import {
+  api,
+  ConsultantResponse,
+  TravelArrangementResponse,
+  TravelArrangementStatus,
+  TravelFacilityInfoResponse,
+  TravelItineraryResponse,
+} from '../api'
 import { PageHeader } from '../components/layout/PageHeader'
 import { useAuth } from '../context/AuthContext'
 
+const statusLabels: Record<TravelArrangementStatus, string> = {
+  BOOKED: 'Chờ chuyên gia xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  CANCELLED: 'Đã hủy',
+}
+
+const transportLabels: Record<string, string> = {
+  FLIGHT: 'Máy bay',
+  TRAIN: 'Tàu hỏa',
+  BUS: 'Xe khách',
+  CAR: 'Ô tô',
+  OTHER: 'Phương tiện khác',
+}
+
 export function MyTravelPage() {
   const { user } = useAuth()
-  const [itinerary, setItinerary] = useState<any>(null)
+  const [itinerary, setItinerary] = useState<TravelItineraryResponse | null>(null)
+  const [consultant, setConsultant] = useState<ConsultantResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isUpdatingId, setIsUpdatingId] = useState<number | null>(null)
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [profileForm, setProfileForm] = useState({
+    travelPreference: '',
+    address: '',
+    city: '',
+    country: '',
+  })
 
   async function loadItinerary() {
     try {
@@ -17,10 +64,44 @@ export function MyTravelPage() {
       setErrorMsg(null)
       const data = await api.getMyTravel()
       setItinerary(data)
+      if (data.consultantId) {
+        const consultantData = await api.getConsultantById(data.consultantId)
+        setConsultant(consultantData)
+        setProfileForm({
+          travelPreference: consultantData.travelPreference || '',
+          address: consultantData.address || '',
+          city: consultantData.city || '',
+          country: consultantData.country || '',
+        })
+      }
     } catch (err: any) {
-      setErrorMsg('Hiện tại không có lịch trình di chuyển nào được gán cho tài khoản của bạn.')
+      setItinerary(null)
+      setErrorMsg(err.message || 'Hiện tại chưa có lịch trình di chuyển được gán cho tài khoản của bạn.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function handleSaveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    try {
+      setIsSavingProfile(true)
+      setErrorMsg(null)
+      setSuccessMsg(null)
+      const updated = await api.updateMyConsultantProfile(profileForm)
+      setConsultant(updated)
+      setProfileForm({
+        travelPreference: updated.travelPreference || '',
+        address: updated.address || '',
+        city: updated.city || '',
+        country: updated.country || '',
+      })
+      setIsEditingProfile(false)
+      setSuccessMsg('Đã cập nhật hồ sơ di chuyển của bạn.')
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Không thể cập nhật hồ sơ di chuyển.')
+    } finally {
+      setIsSavingProfile(false)
     }
   }
 
@@ -28,14 +109,29 @@ export function MyTravelPage() {
     loadItinerary()
   }, [])
 
-  async function handleConfirmTicket(arrangementId: number) {
+  const arrangements = useMemo(
+    () =>
+      [...(itinerary?.arrangements || [])].sort(
+        (a, b) => new Date(a.departureTime).getTime() - new Date(b.departureTime).getTime(),
+      ),
+    [itinerary],
+  )
+
+  const nextTrip = arrangements.find((arrangement) => getArrangementStatus(arrangement) !== 'CANCELLED')
+  const confirmedCount = arrangements.filter((arrangement) => getArrangementStatus(arrangement) === 'CONFIRMED').length
+
+  async function handleUpdateTicketStatus(arrangementId: number, status: 'CONFIRMED' | 'CANCELLED') {
     try {
+      setIsUpdatingId(arrangementId)
       setErrorMsg(null)
-      await api.updateTravelStatus(arrangementId, 'CONFIRMED')
-      setSuccessMsg('Xác nhận lịch di chuyển thành công!')
+      setSuccessMsg(null)
+      await api.updateTravelStatus(arrangementId, status)
+      setSuccessMsg(status === 'CONFIRMED' ? 'Đã xác nhận chặng di chuyển thành công.' : 'Đã hủy chặng di chuyển.')
       await loadItinerary()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Lỗi xác nhận lịch trình.')
+      setErrorMsg(err.message || 'Không thể cập nhật trạng thái chặng di chuyển này.')
+    } finally {
+      setIsUpdatingId(null)
     }
   }
 
@@ -48,140 +144,469 @@ export function MyTravelPage() {
   }
 
   return (
-    <div className="space-y-7">
-      <PageHeader
-        title="Lịch trình của tôi"
-        description="Theo dõi chi tiết vé máy bay, phòng khách sạn và lịch trình công tác của bạn"
-        icon={<Navigation className="h-10 w-10" strokeWidth={2.4} />}
-      />
+    <div className="space-y-7 text-left">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <PageHeader
+          title="Lịch trình của tôi"
+          description="Theo dõi vé di chuyển, nơi lưu trú và xác nhận các chặng công tác đã được hậu cần đặt"
+          icon={<Navigation className="h-10 w-10" strokeWidth={2.4} />}
+        />
+        <button
+          type="button"
+          onClick={loadItinerary}
+          className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-[#0B3970] shadow-sm transition hover:border-[#5DF8D8]"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Làm mới
+        </button>
+      </div>
 
       {errorMsg && (
-        <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 p-4 text-xs font-bold text-amber-700">
-          <Info className="h-5 w-5 shrink-0" />
-          <span>{errorMsg}</span>
-        </div>
+        <Message tone="warning" icon={<Info className="h-5 w-5 shrink-0" />}>
+          {errorMsg}
+        </Message>
       )}
 
       {successMsg && (
-        <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-xs font-bold text-teal-700 flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-teal-600" />
-          <span>{successMsg}</span>
-        </div>
+        <Message tone="success" icon={<CheckCircle2 className="h-5 w-5 shrink-0" />}>
+          {successMsg}
+        </Message>
       )}
 
-      {itinerary && (
-        <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_340px]">
-          
-          {/* Main travel logs */}
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 text-left">
-              <h3 className="text-base font-black text-[#0B3970] border-b border-slate-100 pb-3 flex items-center gap-2">
-                <Plane className="h-5 w-5 text-blue-600" />
-                Chuyến bay & Chặng xe đã đặt
-              </h3>
+      {!itinerary ? (
+        <EmptyTravelState />
+      ) : (
+        <>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryTile
+              icon={<Route className="h-5 w-5" />}
+              label="Số chặng"
+              value={String(arrangements.length)}
+              detail={`${confirmedCount}/${arrangements.length} chặng đã xác nhận`}
+            />
+            <SummaryTile
+              icon={<TicketCheck className="h-5 w-5" />}
+              label="Trạng thái tổng"
+              value={statusLabels[itinerary.overallStatus]}
+              detail={`Seminar #${itinerary.seminarId || 'N/A'}`}
+            />
+            <SummaryTile
+              icon={<Banknote className="h-5 w-5" />}
+              label="Chi phí dự kiến"
+              value={formatMoney(itinerary.totalCost)}
+              detail="Do phòng hậu cần đặt"
+            />
+            <SummaryTile
+              icon={<CalendarClock className="h-5 w-5" />}
+              label="Chặng kế tiếp"
+              value={nextTrip ? formatShortDateTime(nextTrip.departureTime) : 'Chưa có'}
+              detail={nextTrip ? `${nextTrip.departureLocation} -> ${nextTrip.arrivalLocation}` : 'Không có lịch sắp tới'}
+            />
+          </section>
 
-              <div className="mt-5 space-y-4">
-                {itinerary.arrangements && itinerary.arrangements.length > 0 ? (
-                  itinerary.arrangements.map((a: TravelArrangementResponse) => (
-                    <div key={a.travelArrangementId} className="border rounded-2xl p-5 bg-slate-50/30 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-blue-800 uppercase tracking-wide">
-                          {a.transportMode} • {a.carrierName} ({a.serviceNumber})
-                        </span>
-                        <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-black uppercase ${
-                          a.travelArrangementStatus === 'CONFIRMED'
-                            ? 'bg-teal-50 border-teal-200 text-teal-700'
-                            : 'bg-amber-50 border-amber-200 text-amber-700'
-                        }`}>
-                          {a.travelArrangementStatus === 'CONFIRMED' ? 'Đã xác nhận' : 'Đang chờ duyệt'}
-                        </span>
-                      </div>
+          <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <main className="space-y-6">
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
+                <SectionTitle
+                  icon={<Plane className="h-5 w-5 text-blue-600" />}
+                  title="Các chặng di chuyển"
+                  subtitle="Xác nhận từng chặng sau khi bạn đã kiểm tra đúng thông tin vé"
+                />
 
-                      <div className="grid gap-4 sm:grid-cols-2 text-xs border-t border-slate-100 pt-3">
-                        <div>
-                          <p className="font-extrabold text-slate-400 uppercase text-[9px]">Điểm đi / Thời gian</p>
-                          <p className="font-bold text-slate-700 mt-1">{a.departureLocation}</p>
-                          <p className="text-slate-500 font-semibold mt-0.5">{new Date(a.departureTime).toLocaleString('vi-VN')}</p>
-                        </div>
-                        <div>
-                          <p className="font-extrabold text-slate-400 uppercase text-[9px]">Điểm đến / Thời gian</p>
-                          <p className="font-bold text-slate-700 mt-1">{a.arrivalLocation}</p>
-                          <p className="text-slate-500 font-semibold mt-0.5">{new Date(a.arrivalTime).toLocaleString('vi-VN')}</p>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-xs">
-                        <div>
-                          <span className="font-extrabold text-slate-400 uppercase text-[9px]">Thông tin ghế ngồi:</span>
-                          <span className="font-black text-[#0B3970] ml-1">{a.seatInfo || 'Chưa định cấu hình'}</span>
-                        </div>
-                        {a.travelArrangementStatus === 'BOOKED' && (
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmTicket(a.travelArrangementId)}
-                            className="rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white hover:bg-teal-600 transition shadow-sm"
-                          >
-                            Xác nhận duyệt vé
-                          </button>
-                        )}
-                      </div>
+                <div className="mt-5 space-y-4">
+                  {arrangements.length > 0 ? (
+                    arrangements.map((arrangement, index) => (
+                      <TravelLeg
+                        key={arrangement.travelArrangementId}
+                        arrangement={arrangement}
+                        index={index}
+                        isUpdating={isUpdatingId === arrangement.travelArrangementId}
+                        onConfirm={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CONFIRMED')}
+                        onCancel={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CANCELLED')}
+                      />
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500">
+                      Chưa có chặng xe, tàu hoặc máy bay nào được cấp phát.
                     </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-slate-500 py-4 text-center">Chưa có vé xe/máy bay được cấp phát.</p>
-                )}
-              </div>
-            </div>
+                  )}
+                </div>
+              </section>
 
-            {/* Hotel accommodation */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 text-left">
-              <h3 className="text-base font-black text-[#0B3970] border-b border-slate-100 pb-3 flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-indigo-600" />
-                Nơi lưu trú & Phòng khách sạn chốt chỗ
-              </h3>
-              <div className="mt-5 space-y-3">
-                {itinerary.facilityReservations && itinerary.facilityReservations.length > 0 ? (
-                  itinerary.facilityReservations.map((f: any, idx: number) => (
-                    <div key={idx} className="border rounded-2xl p-4 bg-slate-50/30 flex gap-4 text-xs">
-                      <div className="h-10 w-10 bg-indigo-50 text-indigo-700 flex items-center justify-center rounded shrink-0">
-                        <MapPin className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-[#0B3970]">{f.facilityName}</h4>
-                        <p className="text-slate-400 mt-0.5">{f.address}</p>
-                        <p className="text-slate-500 font-bold mt-1">Liên hệ Lễ tân khách sạn để check-in theo mã Seminar #{itinerary.seminarId}</p>
-                      </div>
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
+                <SectionTitle
+                  icon={<Building2 className="h-5 w-5 text-indigo-600" />}
+                  title="Nơi lưu trú & phòng đã giữ chỗ"
+                  subtitle="Thông tin được lấy từ hợp đồng cơ sở vật chất của seminar"
+                />
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  {itinerary.facilityReservations?.length > 0 ? (
+                    itinerary.facilityReservations.map((facility) => (
+                      <FacilityBlock key={`${facility.seminarId}-${facility.facilityName}`} facility={facility} />
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500 lg:col-span-2">
+                      Chưa có khách sạn hoặc phòng lưu trú được liên kết.
                     </div>
-                  ))
+                  )}
+                </div>
+              </section>
+            </main>
+
+            <aside className="space-y-6">
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-12 w-12 place-items-center rounded-full bg-[#B9FFF1] text-[#009C8E]">
+                    <User className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-[#0B3970]">{user?.fullName}</h3>
+                    <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Chuyên gia đào tạo
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-xs font-bold text-slate-500">
+                  <InfoLine label="Consultant ID" value={`#${itinerary.consultantId}`} />
+                  <InfoLine label="Email" value={consultant?.email || user?.fullName || 'N/A'} />
+                  <InfoLine label="Điện thoại" value={consultant?.phone || 'Chưa cập nhật'} />
+                  <InfoLine label="Chuyên môn" value={consultant?.specialty || 'Chưa cập nhật'} />
+                  <InfoLine label="Seminar liên kết" value={`#${itinerary.seminarId || 'N/A'}`} />
+                  <InfoLine label="Trạng thái" value={statusLabels[itinerary.overallStatus]} strong />
+                  <InfoLine label="Tổng chi phí" value={formatMoney(itinerary.totalCost)} strong />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                  <div>
+                    <h2 className="text-base font-black text-[#0B3970]">Hồ sơ di chuyển</h2>
+                    <p className="mt-1 text-xs font-bold text-slate-400">Thông tin hỗ trợ hậu cần đặt vé và lưu trú</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingProfile((current) => !current)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-black text-[#0B3970] transition hover:border-[#5DF8D8]"
+                  >
+                    {isEditingProfile ? 'Đóng' : 'Sửa'}
+                  </button>
+                </div>
+
+                {isEditingProfile ? (
+                  <form onSubmit={handleSaveProfile} className="mt-4 space-y-3">
+                    <ProfileField
+                      label="Sở thích di chuyển"
+                      value={profileForm.travelPreference}
+                      onChange={(value) => setProfileForm((current) => ({ ...current, travelPreference: value }))}
+                      multiline
+                      placeholder="Ví dụ: ưu tiên chuyến bay buổi sáng, ghế lối đi..."
+                    />
+                    <ProfileField
+                      label="Địa chỉ"
+                      value={profileForm.address}
+                      onChange={(value) => setProfileForm((current) => ({ ...current, address: value }))}
+                      placeholder="Địa chỉ đón/trả phù hợp"
+                    />
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                      <ProfileField
+                        label="Thành phố"
+                        value={profileForm.city}
+                        onChange={(value) => setProfileForm((current) => ({ ...current, city: value }))}
+                        placeholder="Hà Nội"
+                      />
+                      <ProfileField
+                        label="Quốc gia"
+                        value={profileForm.country}
+                        onChange={(value) => setProfileForm((current) => ({ ...current, country: value }))}
+                        placeholder="Việt Nam"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isSavingProfile}
+                      className="w-full rounded-lg bg-[#0B3970] px-4 py-2.5 text-xs font-black text-white transition hover:bg-[#126CB0] disabled:cursor-wait disabled:bg-slate-300"
+                    >
+                      {isSavingProfile ? 'Đang lưu...' : 'Lưu hồ sơ'}
+                    </button>
+                  </form>
                 ) : (
-                  <p className="text-sm text-slate-500 py-4 text-center">Chưa có phòng khách sạn liên kết.</p>
+                  <div className="mt-4 space-y-3 text-xs font-bold text-slate-500">
+                    <InfoLine label="Sở thích di chuyển" value={consultant?.travelPreference || 'Chưa cập nhật'} />
+                    <InfoLine label="Địa chỉ" value={consultant?.address || 'Chưa cập nhật'} />
+                    <InfoLine label="Thành phố" value={consultant?.city || 'Chưa cập nhật'} />
+                    <InfoLine label="Quốc gia" value={consultant?.country || 'Chưa cập nhật'} />
+                  </div>
                 )}
-              </div>
-            </div>
+              </section>
+
+              <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-xs font-semibold leading-5 text-blue-800">
+                <div className="mb-3 flex items-center gap-2 font-black text-blue-900">
+                  <AlertCircle className="h-5 w-5" />
+                  Lưu ý trước khi đi
+                </div>
+                <p>
+                  Kiểm tra đúng điểm đi, điểm đến, giờ khởi hành và mã ghế trước khi xác nhận. Sau khi xác nhận,
+                  hệ thống ghi nhận thời điểm xác nhận để phòng hậu cần hoàn tất hồ sơ di chuyển.
+                </p>
+              </section>
+            </aside>
           </div>
-
-          {/* Sidebar profile */}
-          <aside className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl text-left">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-[#B9FFF1] text-[#009C8E] flex items-center justify-center">
-                  <User className="h-8 w-8" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-[#0B3970]">{user?.fullName}</h4>
-                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Chuyên gia giảng dạy</p>
-                </div>
-              </div>
-              <div className="mt-5 border-t pt-4 text-xs text-slate-500 space-y-2">
-                <p><strong>Seminar liên kết:</strong> #{itinerary.seminarId}</p>
-                <p><strong>Trạng thái chặng di chuyển:</strong> <span className="font-black text-teal-600">{itinerary.overallStatus}</span></p>
-                <p className="text-[10px] text-slate-400 leading-4 mt-2">Vui lòng kiểm tra kỹ múi giờ bay và các lưu ý giao nhận phòng trước khi di chuyển.</p>
-              </div>
-            </div>
-          </aside>
-
-        </div>
+        </>
       )}
     </div>
   )
+}
+
+function TravelLeg({
+  arrangement,
+  index,
+  isUpdating,
+  onConfirm,
+  onCancel,
+}: {
+  arrangement: TravelArrangementResponse
+  index: number
+  isUpdating: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const status = getArrangementStatus(arrangement)
+  const statusClass = {
+    BOOKED: 'border-amber-200 bg-amber-50 text-amber-700',
+    CONFIRMED: 'border-teal-200 bg-teal-50 text-teal-700',
+    CANCELLED: 'border-red-200 bg-red-50 text-red-700',
+  }[status]
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
+      <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Chặng {index + 1}</p>
+          <h3 className="mt-1 text-base font-black text-[#0B3970]">
+            {transportLabels[arrangement.transportMode] || arrangement.transportMode}
+            {arrangement.carrierName ? ` - ${arrangement.carrierName}` : ''}
+          </h3>
+          <p className="mt-1 text-xs font-bold text-slate-500">
+            {arrangement.travelAgencyName || 'Đặt trực tiếp'} • Mã chuyến: {arrangement.serviceNumber || 'N/A'}
+          </p>
+        </div>
+        <span className={`inline-flex w-fit items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-black uppercase ${statusClass}`}>
+          {status === 'CONFIRMED' ? <CheckCircle2 className="h-3.5 w-3.5" /> : status === 'CANCELLED' ? <XCircle className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+          {statusLabels[status]}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
+        <TravelPoint label="Điểm đi" location={arrangement.departureLocation} time={arrangement.departureTime} />
+        <div className="hidden h-px w-16 bg-slate-200 md:block" />
+        <TravelPoint label="Điểm đến" location={arrangement.arrivalLocation} time={arrangement.arrivalTime} />
+      </div>
+
+      <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 text-xs font-bold text-slate-500 sm:grid-cols-3">
+        <InfoLine label="Ghế / ghi chú vé" value={arrangement.seatInfo || 'Chưa có'} />
+        <InfoLine label="Chi phí" value={formatMoney(arrangement.cost)} />
+        <InfoLine
+          label="Đã xác nhận lúc"
+          value={arrangement.confirmationSentDatetime ? formatDateTime(arrangement.confirmationSentDatetime) : 'Chưa xác nhận'}
+        />
+      </div>
+
+      {status === 'BOOKED' && (
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isUpdating}
+            className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-black text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-wait disabled:border-slate-200 disabled:text-slate-300"
+          >
+            <XCircle className="h-4 w-4" />
+            Hủy chặng
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isUpdating}
+            className="flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-teal-600 disabled:cursor-wait disabled:bg-teal-300"
+          >
+            <TicketCheck className="h-4 w-4" />
+            {isUpdating ? 'Đang xác nhận...' : 'Xác nhận chặng này'}
+          </button>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function TravelPoint({ label, location, time }: { label: string; location: string; time: string }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white p-4">
+      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-black text-[#0B3970]">{location}</p>
+      <p className="mt-1 text-xs font-bold text-slate-500">{formatDateTime(time)}</p>
+    </div>
+  )
+}
+
+function FacilityBlock({ facility }: { facility: TravelFacilityInfoResponse }) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
+      <div className="flex gap-3">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700">
+          <MapPin className="h-6 w-6" />
+        </div>
+        <div>
+          <h3 className="text-sm font-black text-[#0B3970]">{facility.facilityName}</h3>
+          <p className="mt-1 text-xs font-bold leading-5 text-slate-500">{facility.facilityAddress}</p>
+        </div>
+      </div>
+      {facility.roomNameSpecs?.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Phòng đã giữ</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {facility.roomNameSpecs.map((room) => (
+              <span key={room} className="rounded-md border border-indigo-100 bg-white px-2.5 py-1 text-[11px] font-bold text-indigo-700">
+                {room}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function SummaryTile({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70">
+      <div className="flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#E9FFFB] text-[#007E73]">{icon}</div>
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+          <p className="mt-1 text-lg font-black text-[#0B3970]">{value}</p>
+        </div>
+      </div>
+      <p className="mt-3 truncate text-xs font-bold text-slate-500">{detail}</p>
+    </div>
+  )
+}
+
+function SectionTitle({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+  return (
+    <div className="flex items-start gap-2 border-b border-slate-100 pb-4">
+      {icon}
+      <div>
+        <h2 className="text-base font-black text-[#0B3970]">{title}</h2>
+        <p className="mt-1 text-xs font-bold text-slate-400">{subtitle}</p>
+      </div>
+    </div>
+  )
+}
+
+function Message({ tone, icon, children }: { tone: 'success' | 'warning'; icon: React.ReactNode; children: React.ReactNode }) {
+  const className =
+    tone === 'success'
+      ? 'border-teal-200 bg-teal-50 text-teal-700'
+      : 'border-amber-200 bg-amber-50 text-amber-700'
+
+  return (
+    <div className={`flex items-start gap-2.5 rounded-xl border p-4 text-xs font-bold ${className}`}>
+      {icon}
+      <span>{children}</span>
+    </div>
+  )
+}
+
+function EmptyTravelState() {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center shadow-xl shadow-slate-200/70">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-400">
+        <Plane className="h-7 w-7" />
+      </div>
+      <h2 className="mt-4 text-lg font-black text-[#0B3970]">Chưa có lịch trình di chuyển</h2>
+      <p className="mx-auto mt-2 max-w-md text-sm font-semibold leading-6 text-slate-500">
+        Khi phòng hậu cần đặt vé hoặc liên kết khách sạn cho seminar của bạn, thông tin sẽ xuất hiện tại đây.
+      </p>
+    </div>
+  )
+}
+
+function InfoLine({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+      <p className={`mt-0.5 ${strong ? 'font-black text-[#0B3970]' : 'text-slate-600'}`}>{value}</p>
+    </div>
+  )
+}
+
+function ProfileField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  multiline = false,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  multiline?: boolean
+}) {
+  return (
+    <label className="block text-xs font-bold text-slate-600">
+      <span className="mb-1.5 block">{label}</span>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          rows={3}
+          className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-[#18395F] outline-none transition focus:border-[#5DF8D8]"
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-[#18395F] outline-none transition focus:border-[#5DF8D8]"
+        />
+      )}
+    </label>
+  )
+}
+
+function getArrangementStatus(arrangement: TravelArrangementResponse): TravelArrangementStatus {
+  return arrangement.status || arrangement.travelArrangementStatus || 'BOOKED'
+}
+
+function formatDateTime(value: string) {
+  if (!value) return 'N/A'
+  return new Date(value).toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
+function formatShortDateTime(value: string) {
+  if (!value) return 'N/A'
+  return new Date(value).toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  })
+}
+
+function formatMoney(value: number | null) {
+  if (value === null || value === undefined) return 'Chưa có'
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(value)
 }
