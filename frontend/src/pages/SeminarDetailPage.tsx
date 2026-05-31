@@ -7,6 +7,7 @@ import {
   FileText,
   Mail,
   MapPin,
+  Pencil,
   Package2,
   PackageCheck,
   PieChart,
@@ -15,6 +16,7 @@ import {
   PlusCircle,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Truck,
   User,
   UserCheck,
@@ -23,12 +25,19 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { InfoCard } from '../components/info/InfoCard'
-import { api, SeminarResponse, SeminarReservationResponse, TravelArrangementResponse, MaterialRequestResponse, SeminarRequirementsPreviewResponse, FacilityResponse } from '../api'
+import { api, SeminarResponse, SeminarReservationResponse, TravelArrangementResponse, MaterialRequestResponse, SeminarRequirementsPreviewResponse, FacilityResponse, AudioVisualEquipmentResponse, TravelItineraryResponse } from '../api'
 import { useAuth } from '../context/AuthContext'
 
 interface SeminarDetailPageProps {
   seminarId: number
   onBack: () => void
+}
+
+type DraftRoom = {
+  roomNameSpec: string
+  seatingArrangement: string
+  numSeats: string
+  roomImage: File | null
 }
 
 export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps) {
@@ -38,9 +47,11 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   const [seminar, setSeminar] = useState<SeminarResponse | null>(null)
   const [reservation, setReservation] = useState<SeminarReservationResponse | null>(null)
   const [travelList, setTravelList] = useState<TravelArrangementResponse[]>([])
+  const [travelItinerary, setTravelItinerary] = useState<TravelItineraryResponse | null>(null)
   const [materialsList, setMaterialsList] = useState<MaterialRequestResponse[]>([])
   const [previewRequirements, setPreviewRequirements] = useState<SeminarRequirementsPreviewResponse | null>(null)
   const [facilities, setFacilities] = useState<FacilityResponse[]>([])
+  const [avEquipmentOptions, setAvEquipmentOptions] = useState<AudioVisualEquipmentResponse[]>([])
 
   // UI Flow States
   const [isLoading, setIsLoading] = useState(true)
@@ -50,10 +61,11 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
   // Modals & Sub-forms
   const [isAssigning, setIsAssigning] = useState(false)
-  const [isApprovingContract, setIsApprovingContract] = useState(false)
   const [isAddingTravel, setIsAddingTravel] = useState(false)
+  const [editingTravelId, setEditingTravelId] = useState<number | null>(null)
   const [isCreatingMaterials, setIsCreatingMaterials] = useState(false)
   const [isCreatingFacility, setIsCreatingFacility] = useState(false)
+  const [isCompletingVenue, setIsCompletingVenue] = useState(false)
   const [showFacilityForm, setShowFacilityForm] = useState(false)
   
   // Form fields
@@ -71,6 +83,16 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   const [facilitySalesEmail, setFacilitySalesEmail] = useState('')
   const [facilityRoomCount, setFacilityRoomCount] = useState('')
   const [facilityDailyCost, setFacilityDailyCost] = useState('')
+
+  // Venue completion fields
+  const [draftRooms, setDraftRooms] = useState<DraftRoom[]>([
+    { roomNameSpec: '', seatingArrangement: '', numSeats: '', roomImage: null },
+  ])
+
+  // AV reservation fields
+  const [avRows, setAvRows] = useState<Array<{ equipmentId: string; quantityReserved: string; costForEachEquipment: string }>>([
+    { equipmentId: '', quantityReserved: '1', costForEachEquipment: '0' },
+  ])
 
   // Travel fields
   const [transportMode, setTransportMode] = useState<string>('FLIGHT')
@@ -114,6 +136,13 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
         setTravelList([])
       }
 
+      try {
+        const itinerary = await api.getTravelItinerary(seminarId, sem.consultantId)
+        setTravelItinerary(itinerary)
+      } catch {
+        setTravelItinerary(null)
+      }
+
       // Load material requests
       try {
         const mat = await api.getMaterialRequestsBySeminar(seminarId)
@@ -137,6 +166,9 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
           const facs = await api.searchFacilities(sem.city, sem.anticipatedRegistrants)
           setFacilities(facs.content || [])
+
+          const avOptions = await api.getAudioVisualEquipments()
+          setAvEquipmentOptions(avOptions || [])
         } catch {
           // Ignore background load failures
         }
@@ -227,28 +259,71 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
     }
   }
 
-  async function handleApproveContractSubmit(e: React.FormEvent) {
+  async function handleCompleteVenueSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!reservation?.contractId || !scannedFile || !finalCost) {
       setErrorMsg('Vui lòng chọn file quét hợp đồng và điền tổng chi phí.')
       return
     }
+
+    const roomsToCreate = draftRooms.filter((room) => room.roomNameSpec && room.numSeats)
+    const existingSeatCount =
+      reservation.roomReservations?.reduce((total, room) => total + room.numSeats, 0) || 0
+    const newSeatCount = roomsToCreate.reduce((total, room) => total + Number(room.numSeats || 0), 0)
+    if (existingSeatCount + newSeatCount < seminar!.anticipatedRegistrants) {
+      setErrorMsg(`Tổng số ghế phòng họp cần tối thiểu ${seminar!.anticipatedRegistrants} chỗ.`)
+      return
+    }
+
+    const equipments = avRows
+      .filter((row) => row.equipmentId && row.quantityReserved)
+      .map((row) => ({
+        equipmentId: Number(row.equipmentId),
+        quantityReserved: Number(row.quantityReserved),
+        costForEachEquipment: Number(row.costForEachEquipment) || 0,
+      }))
+
     try {
+      setIsCompletingVenue(true)
       setErrorMsg(null)
+
+      for (const room of roomsToCreate) {
+        const formData = new FormData()
+        formData.append('contractId', String(reservation.contractId))
+        formData.append('roomNameSpec', room.roomNameSpec)
+        formData.append('seatingArrangement', room.seatingArrangement)
+        formData.append('numSeats', room.numSeats)
+        if (room.roomImage) {
+          formData.append('roomImage', room.roomImage)
+        }
+        await api.createRoomReservation(formData)
+      }
+
+      if (equipments.length > 0) {
+        await api.saveAvEquipmentReservations({
+          contractId: reservation.contractId,
+          equipments,
+        })
+      }
+
       await api.approveContract(
         reservation.contractId,
         scannedFile,
         Number(finalCost),
-        contractNotes
+        contractNotes,
       )
-      setSuccessMsg('Duyệt ký hợp đồng khách sạn thành công! Địa điểm tổ chức đã được chốt.')
-      setIsApprovingContract(false)
+
+      setSuccessMsg('Đã hoàn tất địa điểm tổ chức: phòng họp, AV và hợp đồng đã được duyệt.')
       setScannedFile(null)
       setFinalCost('')
       setContractNotes('')
+      setDraftRooms([{ roomNameSpec: '', seatingArrangement: '', numSeats: '', roomImage: null }])
+      setAvRows([{ equipmentId: '', quantityReserved: '1', costForEachEquipment: '0' }])
       await loadAllLogisticsData()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Lỗi duyệt ký hợp đồng.')
+      setErrorMsg(err.message || 'Không thể hoàn tất cấu hình địa điểm.')
+    } finally {
+      setIsCompletingVenue(false)
     }
   }
 
@@ -260,7 +335,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
     }
     try {
       setErrorMsg(null)
-      await api.createTravel({
+      const payload = {
         seminarId: seminar.id,
         consultantId: seminar.consultantId,
         travelAgencyName: travelAgency,
@@ -273,13 +348,50 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
         arrivalTime: arrivalTime + ':00',
         seatInfo: seatInfo || '32A',
         cost: Number(travelCost) || 0,
-      })
-      setSuccessMsg('Lên lịch trình vé di chuyển cho chuyên gia thành công!')
+      }
+
+      if (editingTravelId) {
+        await api.updateTravel(editingTravelId, payload)
+        setSuccessMsg('Cập nhật lịch trình di chuyển thành công!')
+      } else {
+        await api.createTravel(payload)
+        setSuccessMsg('Lên lịch trình vé di chuyển cho chuyên gia thành công!')
+      }
       setIsAddingTravel(false)
+      setEditingTravelId(null)
+      resetTravelForm()
       await loadAllLogisticsData()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Lỗi đặt vé di chuyển.')
+      setErrorMsg(err.message || 'Lỗi lưu lịch trình di chuyển.')
     }
+  }
+
+  function startEditTravel(travel: TravelArrangementResponse) {
+    setEditingTravelId(travel.travelArrangementId)
+    setTransportMode(travel.transportMode)
+    setCarrierName(travel.carrierName || '')
+    setServiceNumber(travel.serviceNumber || '')
+    setDepartureLocation(travel.departureLocation)
+    setArrivalLocation(travel.arrivalLocation)
+    setDepartureTime(toDateTimeInputValue(travel.departureTime))
+    setArrivalTime(toDateTimeInputValue(travel.arrivalTime))
+    setSeatInfo(travel.seatInfo || '')
+    setTravelCost(travel.cost !== null && travel.cost !== undefined ? String(travel.cost) : '')
+    setTravelAgency(travel.travelAgencyName || '')
+    setIsAddingTravel(true)
+  }
+
+  function resetTravelForm() {
+    setTransportMode('FLIGHT')
+    setCarrierName('')
+    setServiceNumber('')
+    setDepartureLocation('')
+    setArrivalLocation('')
+    setDepartureTime('')
+    setArrivalTime('')
+    setSeatInfo('')
+    setTravelCost('')
+    setTravelAgency('Đại lý vé Hồng Hà')
   }
 
   async function handleConfirmTravelTicket(travelId: number) {
@@ -290,6 +402,28 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
       await loadAllLogisticsData()
     } catch (err: any) {
       setErrorMsg(err.message || 'Lỗi xác nhận lịch trình.')
+    }
+  }
+
+  async function handleCancelTravelTicket(travelId: number) {
+    try {
+      setErrorMsg(null)
+      await api.updateTravelStatus(travelId, 'CANCELLED')
+      setSuccessMsg('Đã hủy lịch trình di chuyển.')
+      await loadAllLogisticsData()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi hủy lịch trình.')
+    }
+  }
+
+  async function handleDeleteTravelTicket(travelId: number) {
+    try {
+      setErrorMsg(null)
+      await api.deleteTravel(travelId)
+      setSuccessMsg('Đã xóa lịch trình di chuyển.')
+      await loadAllLogisticsData()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi xóa lịch trình.')
     }
   }
 
@@ -624,7 +758,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                     <DetailField label="File scan hợp đồng" value={
                       reservation.contractDocPath ? (
                         <a
-                          href={`http://localhost:8080/api/v1/facility-contracts/view-doc?path=${encodeURIComponent(reservation.contractDocPath)}`}
+                          href={facilityFileUrl(reservation.contractDocPath)}
                           target="_blank"
                           rel="noreferrer"
                           className="text-blue-600 font-black underline hover:text-blue-800"
@@ -638,18 +772,49 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                   </div>
 
                   {/* Room bookings listing */}
-                  <div className="border-t border-slate-100 pt-5 space-y-3">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Phòng họp & Sơ đồ bàn ghế đã gán</h3>
+                  <div className="border-t border-slate-100 pt-5 space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Phòng họp & Sơ đồ bàn ghế đã gán</h3>
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
+                          Lưu tên phòng, kiểu sắp xếp, số ghế và ảnh minh họa phòng họp.
+                        </p>
+                      </div>
+                      {reservation.contractStatus === 'APPROVED' && (
+                        <span className="rounded-lg bg-teal-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-teal-700">
+                          Đã khóa cấu hình
+                        </span>
+                      )}
+                    </div>
+
+                    {canManageSeminarLogistics && reservation.contractStatus !== 'APPROVED' && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800">
+                        Phòng họp sẽ được nhập trong form hoàn tất địa điểm bên dưới, rồi duyệt hợp đồng ở bước cuối.
+                      </div>
+                    )}
+
                     <div className="grid gap-3 sm:grid-cols-2">
                       {reservation.roomReservations && reservation.roomReservations.length > 0 ? (
                         reservation.roomReservations.map((r, i) => (
-                          <div key={i} className="border border-slate-200 rounded-xl p-3.5 bg-slate-50/50 flex gap-3 text-xs leading-5">
-                            <div className="h-10 w-10 rounded bg-[#EBFDFA] text-teal-600 flex items-center justify-center shrink-0">
-                              <Building2 className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <p className="font-extrabold text-[#0B3970]">{r.roomNameSpec}</p>
-                              <p className="text-slate-500">Bố trí bàn ghế: {r.seatingArrangement} • {r.numSeats} chỗ ngồi</p>
+                          <div key={r.roomReservationId || i} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/50 text-xs leading-5">
+                            {r.roomImageUrl ? (
+                              <img
+                                src={facilityFileUrl(r.roomImageUrl)}
+                                alt={r.roomNameSpec}
+                                className="h-32 w-full object-cover"
+                              />
+                            ) : (
+                              <div className="grid h-24 w-full place-items-center bg-[#EBFDFA] text-teal-600">
+                                <Building2 className="h-8 w-8" />
+                              </div>
+                            )}
+                            <div className="space-y-2 p-3.5">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-extrabold text-[#0B3970]">{r.roomNameSpec}</p>
+                                  <p className="text-slate-500">Bố trí: {r.seatingArrangement || 'Chưa ghi'} • {r.numSeats} chỗ ngồi</p>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ))
@@ -660,8 +825,21 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                   </div>
 
                   {/* Audio visual equipment list */}
-                  <div className="border-t border-slate-100 pt-5 space-y-3">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Thiết bị âm thanh, ánh sáng (AV) thuê thêm</h3>
+                  <div className="border-t border-slate-100 pt-5 space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Thiết bị âm thanh, ánh sáng (AV) thuê thêm</h3>
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
+                          Danh mục thiết bị lấy từ module masterdata, lưu theo hợp đồng địa điểm.
+                        </p>
+                      </div>
+                      {reservation.contractStatus === 'APPROVED' && (
+                        <span className="rounded-lg bg-teal-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-teal-700">
+                          Đã khóa cấu hình
+                        </span>
+                      )}
+                    </div>
+
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
@@ -675,9 +853,9 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                           {reservation.avEquipments && reservation.avEquipments.length > 0 ? (
                             reservation.avEquipments.map((av, idx) => (
                               <tr key={idx} className="border-b font-bold text-slate-600">
-                                <td className="py-2 text-left">AV Equipment #{av.equipmentId}</td>
+                                <td className="py-2 text-left">{getEquipmentLabel(av.equipmentId, avEquipmentOptions)}</td>
                                 <td className="py-2 text-right">{av.quantityReserved} bộ</td>
-                                <td className="py-2 text-right">{av.costForEachEquipment.toLocaleString('vi-VN')} VNĐ</td>
+                                <td className="py-2 text-right">{formatCurrency(av.costForEachEquipment || 0)}</td>
                               </tr>
                             ))
                           ) : (
@@ -690,74 +868,127 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                     </div>
                   </div>
 
-                  {/* Approve Contract Form for Coordinator */}
+                  {/* Final venue completion form */}
                   {canManageSeminarLogistics && reservation.contractStatus === 'PENDING_NEGOTIATE' && (
-                    <div className="border-t border-slate-100 pt-5 space-y-4">
-                      {!isApprovingContract ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsApprovingContract(true)}
-                          className="flex items-center gap-2 rounded-xl bg-teal-500 px-5 py-3 text-xs font-black text-white hover:bg-teal-600 transition"
-                        >
-                          <FileSignature className="h-4.5 w-4.5" />
-                          Duyệt ký & Tải bản scan Hợp đồng lên
-                        </button>
-                      ) : (
-                        <form onSubmit={handleApproveContractSubmit} className="border p-5 rounded-xl bg-[#F0FFFC] space-y-4">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-[#065A4F]">Tải scan & Hoàn tất ký hợp đồng</h4>
-                          
+                    <form onSubmit={handleCompleteVenueSubmit} className="border-t border-slate-100 pt-5 space-y-5">
+                      <div className="rounded-2xl border border-teal-100 bg-[#F0FFFC] p-5 space-y-5">
+                        <div className="flex items-center gap-2 text-[#065A4F]">
+                          <FileSignature className="h-5 w-5" />
+                          <h4 className="text-sm font-black">Hoàn tất cấu hình địa điểm & duyệt hợp đồng</h4>
+                        </div>
+
+                        <div className="space-y-3">
+                          <h5 className="text-xs font-black uppercase tracking-wider text-slate-500">1. Phòng họp</h5>
+                          {draftRooms.map((room, index) => (
+                            <div key={index} className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <FacilityInput label="Tên/loại phòng *" value={room.roomNameSpec} onChange={(value) => updateDraftRoom(index, 'roomNameSpec', value, setDraftRooms)} placeholder="VD: Grand Ballroom A" />
+                                <FacilityInput label="Kiểu sắp xếp bàn ghế" value={room.seatingArrangement} onChange={(value) => updateDraftRoom(index, 'seatingArrangement', value, setDraftRooms)} placeholder="VD: U-shape, Classroom, Theater" />
+                                <FacilityInput label="Số ghế *" type="number" value={room.numSeats} onChange={(value) => updateDraftRoom(index, 'numSeats', value, setDraftRooms)} placeholder={`Tối thiểu ${seminar.anticipatedRegistrants}`} />
+                                <label className="flex flex-col gap-1.5 text-xs">
+                                  <span className="font-extrabold text-slate-600">Ảnh phòng họp</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => updateDraftRoom(index, 'roomImage', e.target.files?.[0] || null, setDraftRooms)}
+                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden"
+                                  />
+                                </label>
+                              </div>
+                              {draftRooms.length > 1 && (
+                                <div className="mt-3 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDraftRooms((current) => current.filter((_, roomIndex) => roomIndex !== index))}
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-black text-red-500 transition hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Xóa phòng
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setDraftRooms((current) => [...current, { roomNameSpec: '', seatingArrangement: '', numSeats: '', roomImage: null }])}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-black text-[#0B3970] transition hover:border-[#0B3970]"
+                          >
+                            <PlusCircle className="h-4 w-4" />
+                            Thêm phòng
+                          </button>
+                        </div>
+
+                        <div className="space-y-3">
+                          <h5 className="text-xs font-black uppercase tracking-wider text-slate-500">2. Thiết bị AV</h5>
+                          {avRows.map((row, index) => (
+                            <div key={index} className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_120px_150px_40px]">
+                              <label className="flex flex-col gap-1.5 text-xs">
+                                <span className="font-extrabold text-slate-600">Thiết bị</span>
+                                <select
+                                  value={row.equipmentId}
+                                  onChange={(e) => updateAvRow(index, 'equipmentId', e.target.value, setAvRows)}
+                                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden"
+                                >
+                                  <option value="">Chọn thiết bị...</option>
+                                  {avEquipmentOptions.map((equipment) => (
+                                    <option key={equipment.id} value={equipment.id}>
+                                      {equipment.equipmentName} ({equipment.unit})
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <FacilityInput label="Số lượng" type="number" value={row.quantityReserved} onChange={(value) => updateAvRow(index, 'quantityReserved', value, setAvRows)} placeholder="1" />
+                              <FacilityInput label="Đơn giá/bộ" type="number" value={row.costForEachEquipment} onChange={(value) => updateAvRow(index, 'costForEachEquipment', value, setAvRows)} placeholder="0" />
+                              <button
+                                type="button"
+                                onClick={() => setAvRows((current) => current.filter((_, rowIndex) => rowIndex !== index))}
+                                className="mt-5 grid h-10 w-10 place-items-center rounded-lg text-red-500 transition hover:bg-red-50"
+                                title="Xóa dòng"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setAvRows((current) => [...current, { equipmentId: '', quantityReserved: '1', costForEachEquipment: '0' }])}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-black text-[#0B3970] transition hover:border-[#0B3970]"
+                          >
+                            <PlusCircle className="h-4 w-4" />
+                            Thêm thiết bị
+                          </button>
+                        </div>
+
+                        <div className="space-y-3">
+                          <h5 className="text-xs font-black uppercase tracking-wider text-slate-500">3. Hợp đồng ký duyệt</h5>
                           <div className="grid gap-4 sm:grid-cols-2 text-xs">
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-extrabold text-slate-600">File quét hợp đồng (PDF/Image) *</label>
+                            <label className="flex flex-col gap-1.5">
+                              <span className="font-extrabold text-slate-600">File quét hợp đồng (PDF/Image) *</span>
                               <input
                                 type="file"
                                 required
                                 onChange={(e) => setScannedFile(e.target.files?.[0] || null)}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-hidden"
                               />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-extrabold text-slate-600">Tổng giá trị hợp đồng thực tế (VNĐ) *</label>
-                              <input
-                                type="number"
-                                required
-                                placeholder="Ví dụ: 12000000"
-                                value={finalCost}
-                                onChange={(e) => setFinalCost(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-hidden"
-                              />
-                            </div>
+                            </label>
+                            <FacilityInput label="Tổng giá trị hợp đồng thực tế (VNĐ) *" type="number" value={finalCost} onChange={setFinalCost} placeholder="Ví dụ: 12000000" />
                           </div>
+                          <FacilityInput label="Ghi chú điều khoản" value={contractNotes} onChange={setContractNotes} placeholder="Thương lượng giảm 10% tiệc trà..." />
+                        </div>
 
-                          <div className="flex flex-col gap-1.5 text-xs">
-                            <label className="font-extrabold text-slate-600">Ghi chú điều khoản</label>
-                            <input
-                              type="text"
-                              placeholder="Thương lượng giảm 10% tiệc trà..."
-                              value={contractNotes}
-                              onChange={(e) => setContractNotes(e.target.value)}
-                              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-hidden"
-                            />
-                          </div>
-
-                          <div className="flex justify-end gap-3.5 pt-2">
-                            <button
-                              type="button"
-                              onClick={() => setIsApprovingContract(false)}
-                              className="text-xs font-bold text-slate-500 hover:text-slate-700"
-                            >
-                              Hủy
-                            </button>
-                            <button
-                              type="submit"
-                              className="rounded-lg bg-teal-600 px-4 py-2 text-xs font-black text-white hover:bg-teal-700 transition"
-                            >
-                              Xác nhận phê duyệt ký kết
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </div>
+                        <div className="flex justify-end pt-2">
+                          <button
+                            type="submit"
+                            disabled={isCompletingVenue}
+                            className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-3 text-xs font-black text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          >
+                            <FileSignature className="h-4 w-4" />
+                            {isCompletingVenue ? 'Đang hoàn tất...' : 'Submit & duyệt hợp đồng'}
+                          </button>
+                        </div>
+                      </div>
+                    </form>
                   )}
 
                 </div>
@@ -773,242 +1004,190 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                   <Plane className="h-5.5 w-5.5 text-[#126CB0]" />
                   <h2 className="text-base font-black">Lịch trình di chuyển của chuyên gia</h2>
                 </div>
+                {canManageSeminarLogistics && !isAddingTravel && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingTravelId(null)
+                      resetTravelForm()
+                      setIsAddingTravel(true)
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#0B3970] px-4 py-2.5 text-xs font-black text-white transition hover:bg-[#126CB0]"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                    Thêm chặng
+                  </button>
+                )}
               </div>
+
+              {travelItinerary && (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <CostCard label="Tổng chi phí di chuyển" value={travelItinerary.totalCost || 0} note={`${travelItinerary.arrangements.length} chặng`} />
+                  <div className="rounded-2xl border border-slate-200 bg-[#F8FBFF] p-5">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Trạng thái tổng thể</p>
+                    <p className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${travelStatusClass(travelItinerary.overallStatus)}`}>
+                      {travelStatusLabel(travelItinerary.overallStatus)}
+                    </p>
+                    <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">Tổng hợp từ toàn bộ chặng di chuyển</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-[#F8FBFF] p-5">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Địa điểm lưu trú/tổ chức</p>
+                    <p className="mt-2 text-sm font-black text-[#0B3970]">
+                      {travelItinerary.facilityReservations[0]?.facilityName || 'Chưa có địa điểm'}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                      {travelItinerary.facilityReservations[0]?.facilityAddress || 'Chưa có thông tin từ facility_contract'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {isAddingTravel && canManageSeminarLogistics && (
+                <form onSubmit={handleAddTravelSubmit} className="border p-5 rounded-xl bg-slate-50/50 space-y-4 text-left">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-[#0B3970]">
+                    {editingTravelId ? 'Cập nhật lịch trình di chuyển' : 'Nhập thông tin vé đưa đón chuyên gia'}
+                  </h4>
+
+                  <div className="grid gap-4 sm:grid-cols-3 text-xs">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="font-bold text-slate-600">Phương thức vận chuyển *</label>
+                      <select
+                        value={transportMode}
+                        onChange={(e) => setTransportMode(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="FLIGHT">Máy bay (Flight)</option>
+                        <option value="TRAIN">Tàu hỏa (Train)</option>
+                        <option value="BUS">Xe khách liên tỉnh (Bus)</option>
+                        <option value="CAR">Xe ô tô riêng (Car)</option>
+                        <option value="OTHER">Khác</option>
+                      </select>
+                    </div>
+                    <TravelTextInput label="Hãng vận chuyển" value={carrierName} onChange={setCarrierName} placeholder="Ví dụ: Vietnam Airlines" />
+                    <TravelTextInput label="Mã hiệu chuyến bay/số xe" value={serviceNumber} onChange={setServiceNumber} placeholder="Ví dụ: VN213" />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 text-xs">
+                    <TravelTextInput label="Điểm khởi hành *" value={departureLocation} onChange={setDepartureLocation} placeholder="Sân bay Nội Bài, Hà Nội" required />
+                    <TravelTextInput label="Điểm đến *" value={arrivalLocation} onChange={setArrivalLocation} placeholder="Sân bay Tân Sơn Nhất, TP.HCM" required />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 text-xs">
+                    <TravelTextInput label="Thời gian khởi hành *" type="datetime-local" value={departureTime} onChange={setDepartureTime} placeholder="" required />
+                    <TravelTextInput label="Thời gian đến nơi *" type="datetime-local" value={arrivalTime} onChange={setArrivalTime} placeholder="" required />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3 text-xs">
+                    <TravelTextInput label="Thông tin số ghế" value={seatInfo} onChange={setSeatInfo} placeholder="12A" />
+                    <TravelTextInput label="Giá vé (VNĐ)" type="number" value={travelCost} onChange={setTravelCost} placeholder="1850000" />
+                    <TravelTextInput label="Đại lý xuất vé" value={travelAgency} onChange={setTravelAgency} placeholder="Đại lý vé Hồng Hà" />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingTravel(false)
+                        setEditingTravelId(null)
+                        resetTravelForm()
+                      }}
+                      className="text-xs font-bold text-slate-500 hover:text-slate-700"
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white hover:bg-teal-600 transition"
+                    >
+                      {editingTravelId ? 'Lưu thay đổi' : 'Tạo lịch trình'}
+                    </button>
+                  </div>
+                </form>
+              )}
 
               {travelList.length === 0 ? (
                 <div className="py-8 text-center space-y-4">
                   <p className="text-sm text-slate-500">Chưa có thông tin vé tàu/máy bay nào được lên lịch đưa đón chuyên gia.</p>
-                  {canManageSeminarLogistics && (
-                    <div>
-                      {!isAddingTravel ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingTravel(true)}
-                          className="inline-flex items-center gap-2 rounded-xl bg-[#0B3970] px-5 py-3 text-xs font-black text-white hover:bg-[#126CB0] transition"
-                        >
-                          <PlusCircle className="h-4 w-4" />
-                          Lên lịch di chuyển mới
-                        </button>
-                      ) : (
-                        <form onSubmit={handleAddTravelSubmit} className="border p-5 rounded-xl bg-slate-50/50 space-y-4 text-left">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-[#0B3970]">Nhập thông tin vé đưa đón chuyên gia</h4>
-                          
-                          <div className="grid gap-4 sm:grid-cols-3 text-xs">
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Phương thức vận chuyển *</label>
-                              <select
-                                value={transportMode}
-                                onChange={(e) => setTransportMode(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              >
-                                <option value="FLIGHT">Máy bay (Flight)</option>
-                                <option value="TRAIN">Tàu hỏa (Train)</option>
-                                <option value="BUS">Xe khách liên tỉnh (Bus)</option>
-                                <option value="CAR">Xe ô tô riêng (Car)</option>
-                              </select>
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Hãng vận chuyển (Carrier) *</label>
-                              <input
-                                type="text"
-                                placeholder="Ví dụ: Vietnam Airlines"
-                                value={carrierName}
-                                onChange={(e) => setCarrierName(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Mã hiệu chuyến bay/số xe *</label>
-                              <input
-                                type="text"
-                                placeholder="Ví dụ: VN213"
-                                value={serviceNumber}
-                                onChange={(e) => setServiceNumber(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 sm:grid-cols-2 text-xs">
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Điểm khởi hành *</label>
-                              <input
-                                type="text"
-                                required
-                                placeholder="Sân bay Nội Bài, Hà Nội"
-                                value={departureLocation}
-                                onChange={(e) => setDepartureLocation(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Điểm đến *</label>
-                              <input
-                                type="text"
-                                required
-                                placeholder="Sân bay Tân Sơn Nhất, TP.HCM"
-                                value={arrivalLocation}
-                                onChange={(e) => setArrivalLocation(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 sm:grid-cols-2 text-xs">
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Thời gian khởi hành *</label>
-                              <input
-                                type="datetime-local"
-                                required
-                                value={departureTime}
-                                onChange={(e) => setDepartureTime(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Thời gian hạ cánh/đến nơi *</label>
-                              <input
-                                type="datetime-local"
-                                required
-                                value={arrivalTime}
-                                onChange={(e) => setArrivalTime(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 sm:grid-cols-3 text-xs">
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Thông tin số ghế</label>
-                              <input
-                                type="text"
-                                placeholder="12A"
-                                value={seatInfo}
-                                onChange={(e) => setSeatInfo(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Giá vé (VNĐ)</label>
-                              <input
-                                type="number"
-                                placeholder="1850000"
-                                value={travelCost}
-                                onChange={(e) => setTravelCost(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="font-bold text-slate-600">Đại lý xuất vé</label>
-                              <input
-                                type="text"
-                                value={travelAgency}
-                                onChange={(e) => setTravelAgency(e.target.value)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end gap-3 pt-2">
-                            <button
-                              type="button"
-                              onClick={() => setIsAddingTravel(false)}
-                              className="text-xs font-bold text-slate-500 hover:text-slate-700"
-                            >
-                              Hủy bỏ
-                            </button>
-                            <button
-                              type="submit"
-                              className="rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white hover:bg-teal-600 transition"
-                            >
-                              Tạo vé di chuyển
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {travelList.map((t) => (
-                    <div key={t.travelArrangementId} className="border border-slate-200 bg-slate-50/20 rounded-2xl p-5 space-y-4 relative overflow-hidden">
-                      <div className="absolute right-4 top-4">
-                        <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${
-                          t.travelArrangementStatus === 'CONFIRMED'
-                            ? 'bg-teal-50 border-teal-200 text-teal-700'
-                            : 'bg-amber-50 border-amber-200 text-amber-700'
-                        }`}>
-                          {t.travelArrangementStatus === 'CONFIRMED' ? 'Chuyên gia đã duyệt vé' : 'Chờ xác nhận vé'}
-                        </span>
+                  {travelList.map((t) => {
+                    const status = getTravelStatus(t)
+                    return (
+                      <div key={t.travelArrangementId} className="border border-slate-200 bg-slate-50/20 rounded-2xl p-5 space-y-4 relative overflow-hidden">
+                        <div className="absolute right-4 top-4">
+                          <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${travelStatusClass(status)}`}>
+                            {travelStatusLabel(status)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 pr-28">
+                          <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700">
+                            <Plane className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-[#0B3970]">
+                              {t.transportMode} • {t.carrierName || 'Chưa nhập hãng'} ({t.serviceNumber || 'N/A'})
+                            </h4>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Xuất vé thông qua: {t.travelAgencyName || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2 text-xs border-t border-slate-100 pt-3">
+                          <TravelInfoBlock label="Điểm khởi hành / Giờ đi" place={t.departureLocation} time={t.departureTime} />
+                          <TravelInfoBlock label="Điểm đến / Giờ đến" place={t.arrivalLocation} time={t.arrivalTime} />
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-3 text-xs border-t border-slate-100 pt-3">
+                          <DetailMini label="Chỗ ngồi" value={t.seatInfo || 'Chưa định cấu hình'} />
+                          <DetailMini label="Chi phí vé" value={formatCurrency(t.cost || 0)} />
+                          <DetailMini label="Xác nhận lúc" value={t.confirmationSentDatetime ? new Date(t.confirmationSentDatetime).toLocaleString('vi-VN') : 'Chưa xác nhận'} />
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-3.5 flex flex-wrap justify-end gap-2">
+                          {canManageSeminarLogistics && status !== 'CANCELLED' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startEditTravel(t)}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-[#0B3970] transition hover:border-[#0B3970]"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Sửa
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelTravelTicket(t.travelArrangementId)}
+                                className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-black text-white transition hover:bg-amber-600"
+                              >
+                                Hủy chặng
+                              </button>
+                            </>
+                          )}
+                          {canManageSeminarLogistics && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTravelTicket(t.travelArrangementId)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-2 text-xs font-black text-white transition hover:bg-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Xóa
+                            </button>
+                          )}
+                          {isConsultant && status === 'BOOKED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmTravelTicket(t.travelArrangementId)}
+                              className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white hover:bg-teal-600 transition shadow-sm"
+                            >
+                              <UserCheck className="h-4 w-4" />
+                              Tôi xác nhận lịch trình
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700">
-                          <Plane className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-black text-[#0B3970]">
-                            {t.transportMode} • {t.carrierName} ({t.serviceNumber})
-                          </h4>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Xuất vé thông qua: {t.travelAgencyName || 'N/A'}</p>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2 text-xs border-t border-slate-100 pt-3">
-                        <div>
-                          <p className="font-extrabold text-slate-400 uppercase text-[9px]">Điểm khởi hành / Giờ bay</p>
-                          <p className="font-bold text-slate-700 mt-1">{t.departureLocation}</p>
-                          <p className="text-slate-500 font-bold text-[10px] mt-0.5">{new Date(t.departureTime).toLocaleString('vi-VN')}</p>
-                        </div>
-                        <div>
-                          <p className="font-extrabold text-slate-400 uppercase text-[9px]">Điểm hạ cánh / Giờ đến</p>
-                          <p className="font-bold text-slate-700 mt-1">{t.arrivalLocation}</p>
-                          <p className="text-slate-500 font-bold text-[10px] mt-0.5">{new Date(t.arrivalTime).toLocaleString('vi-VN')}</p>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2 text-xs border-t border-slate-100 pt-3">
-                        <div>
-                          <p className="font-extrabold text-slate-400 uppercase text-[9px]">Chỗ ngồi (Seat Info)</p>
-                          <p className="font-bold text-slate-700 mt-0.5">{t.seatInfo || 'Chưa định cấu hình'}</p>
-                        </div>
-                        <div>
-                          <p className="font-extrabold text-slate-400 uppercase text-[9px]">Chi phí vé thanh toán</p>
-                          <p className="font-extrabold text-slate-700 mt-0.5">{t.cost ? `${t.cost.toLocaleString('vi-VN')} VNĐ` : '0 VNĐ'}</p>
-                        </div>
-                      </div>
-
-                      {/* Confirm button for Consultant */}
-                      {isConsultant && t.travelArrangementStatus === 'BOOKED' && (
-                        <div className="border-t border-slate-100 pt-3.5 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmTravelTicket(t.travelArrangementId)}
-                            className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white hover:bg-teal-600 transition shadow-sm"
-                          >
-                            <UserCheck className="h-4 w-4" />
-                            Tôi xác nhận đồng ý với lịch trình vé này
-                          </button>
-                        </div>
-                      )}
-
-                    </div>
-                  ))}
-
-                  {/* Add more travel options for Coordinator */}
-                  {canManageSeminarLogistics && (
-                    <div className="pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingTravel(true)}
-                        className="inline-flex items-center gap-1.5 text-xs font-black text-[#126CB0] hover:underline"
-                      >
-                        <PlusCircle className="h-4 w-4" />
-                        Lên thêm lịch trình chặng bay khác cho chuyên gia
-                      </button>
-                    </div>
-                  )}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1270,7 +1449,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               <div className="grid gap-3 text-xs font-bold text-slate-600">
                 <ReportRow label="Địa điểm tổ chức" value={reservation?.facilityName || 'Chưa chọn địa điểm'} />
                 <ReportRow label="Trạng thái hợp đồng" value={reservation?.contractStatus || 'Chưa tạo hợp đồng'} />
-                <ReportRow label="Lịch trình di chuyển" value={`${travelList.filter((t) => t.travelArrangementStatus === 'CONFIRMED').length}/${travelList.length} đã xác nhận`} />
+                <ReportRow label="Lịch trình di chuyển" value={`${travelList.filter((t) => getTravelStatus(t) === 'CONFIRMED').length}/${travelList.length} đã xác nhận`} />
                 <ReportRow label="Yêu cầu học liệu" value={`${materialsList.length} yêu cầu, ${materialItemCount} đơn vị vật tư/học liệu`} />
               </div>
             </div>
@@ -1331,11 +1510,11 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               <div className="flex justify-between items-center">
                 <span>Vé đưa đón Chuyên gia:</span>
                 <span className={`font-black uppercase text-[10px] ${
-                  travelList.length > 0 && travelList.every(t => t.travelArrangementStatus === 'CONFIRMED')
+                  travelList.length > 0 && travelList.every(t => getTravelStatus(t) === 'CONFIRMED')
                     ? 'text-teal-600'
                     : 'text-amber-500'
                 }`}>
-                  {travelList.length > 0 && travelList.every(t => t.travelArrangementStatus === 'CONFIRMED') ? 'CHẤT LƯỢNG OK' : 'CHƯA HOÀN TẤT'}
+                  {travelList.length > 0 && travelList.every(t => getTravelStatus(t) === 'CONFIRMED') ? 'CHẤT LƯỢNG OK' : 'CHƯA HOÀN TẤT'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -1396,6 +1575,50 @@ function FacilityInput({ label, value, onChange, placeholder, type = 'text' }: F
   )
 }
 
+type TravelTextInputProps = {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  type?: string
+  required?: boolean
+}
+
+function TravelTextInput({ label, value, onChange, placeholder, type = 'text', required }: TravelTextInputProps) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="font-bold text-slate-600">{label}</span>
+      <input
+        type={type}
+        required={required}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden focus:border-[#1788A7] focus:ring-2 focus:ring-[#36F1D1]/25"
+      />
+    </label>
+  )
+}
+
+function TravelInfoBlock({ label, place, time }: { label: string; place: string; time: string }) {
+  return (
+    <div>
+      <p className="font-extrabold text-slate-400 uppercase text-[9px]">{label}</p>
+      <p className="font-bold text-slate-700 mt-1">{place}</p>
+      <p className="text-slate-500 font-bold text-[10px] mt-0.5">{new Date(time).toLocaleString('vi-VN')}</p>
+    </div>
+  )
+}
+
+function DetailMini({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <p className="font-extrabold text-slate-400 uppercase text-[9px]">{label}</p>
+      <p className="font-bold text-slate-700 mt-0.5">{value}</p>
+    </div>
+  )
+}
+
 function CostCard({ label, value, note }: { label: string; value: number; note: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-[#F8FBFF] p-5">
@@ -1413,6 +1636,72 @@ function ReportRow({ label, value }: { label: string; value: React.ReactNode }) 
       <span className="font-black text-[#18395F]">{value}</span>
     </div>
   )
+}
+
+function updateAvRow(
+  index: number,
+  field: 'equipmentId' | 'quantityReserved' | 'costForEachEquipment',
+  value: string,
+  setAvRows: React.Dispatch<React.SetStateAction<Array<{ equipmentId: string; quantityReserved: string; costForEachEquipment: string }>>>,
+) {
+  setAvRows((current) =>
+    current.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, [field]: value } : row,
+    ),
+  )
+}
+
+function updateDraftRoom<K extends keyof DraftRoom>(
+  index: number,
+  field: K,
+  value: DraftRoom[K],
+  setDraftRooms: React.Dispatch<React.SetStateAction<DraftRoom[]>>,
+) {
+  setDraftRooms((current) =>
+    current.map((room, roomIndex) =>
+      roomIndex === index ? { ...room, [field]: value } : room,
+    ),
+  )
+}
+
+function getEquipmentLabel(equipmentId: number, options: AudioVisualEquipmentResponse[]) {
+  const equipment = options.find((item) => item.id === equipmentId)
+  if (!equipment) {
+    return `AV Equipment #${equipmentId}`
+  }
+  return `${equipment.equipmentName} (${equipment.unit})`
+}
+
+function getTravelStatus(travel: TravelArrangementResponse) {
+  return travel.status || travel.travelArrangementStatus || 'BOOKED'
+}
+
+function travelStatusLabel(status: 'BOOKED' | 'CONFIRMED' | 'CANCELLED') {
+  const labels = {
+    BOOKED: 'Chờ xác nhận',
+    CONFIRMED: 'Đã xác nhận',
+    CANCELLED: 'Đã hủy',
+  }
+  return labels[status]
+}
+
+function travelStatusClass(status: 'BOOKED' | 'CONFIRMED' | 'CANCELLED') {
+  const classes = {
+    BOOKED: 'bg-amber-50 border-amber-200 text-amber-700',
+    CONFIRMED: 'bg-teal-50 border-teal-200 text-teal-700',
+    CANCELLED: 'bg-red-50 border-red-200 text-red-700',
+  }
+  return classes[status]
+}
+
+function toDateTimeInputValue(value: string) {
+  if (!value) return ''
+  return value.slice(0, 16)
+}
+
+function facilityFileUrl(path?: string | null) {
+  if (!path) return ''
+  return `http://localhost:8080/api/v1/facility-contracts/view-file?path=${encodeURIComponent(path)}`
 }
 
 function formatCurrency(value: number) {

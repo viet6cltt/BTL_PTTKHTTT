@@ -78,7 +78,7 @@ export interface AvEquipmentReservation {
   contractId?: number
   equipmentId: number
   quantityReserved: number
-  costForEachEquipment: number
+  costForEachEquipment: number | null
 }
 
 export interface RoomReservation {
@@ -117,7 +117,24 @@ export interface TravelArrangementResponse {
   seatInfo: string | null
   cost: number | null
   confirmationSentDatetime: string | null
-  travelArrangementStatus: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+  status?: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+  travelArrangementStatus?: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+}
+
+export interface TravelFacilityInfoResponse {
+  seminarId: number
+  facilityName: string
+  facilityAddress: string
+  roomNameSpecs: string[]
+}
+
+export interface TravelItineraryResponse {
+  seminarId: number | null
+  consultantId: number
+  arrangements: TravelArrangementResponse[]
+  facilityReservations: TravelFacilityInfoResponse[]
+  totalCost: number
+  overallStatus: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
 }
 
 export interface MaterialRequestItem {
@@ -396,6 +413,31 @@ export const api = {
     return handleResponse<TravelArrangementResponse[]>(res)
   },
 
+  async getTravelByConsultant(consultantId: number): Promise<TravelArrangementResponse[]> {
+    const res = await fetch(`${API_BASE_URL}/travel-arrangements/by-consultant/${consultantId}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<TravelArrangementResponse[]>(res)
+  },
+
+  async getTravelItinerary(seminarId: number, consultantId: number): Promise<TravelItineraryResponse> {
+    const params = new URLSearchParams({
+      seminarId: String(seminarId),
+      consultantId: String(consultantId),
+    })
+    const res = await fetch(`${API_BASE_URL}/travel-arrangements/itinerary?${params.toString()}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<TravelItineraryResponse>(res)
+  },
+
+  async getTravelArrangementById(travelArrangementId: number): Promise<TravelArrangementResponse> {
+    const res = await fetch(`${API_BASE_URL}/travel-arrangements/${travelArrangementId}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<TravelArrangementResponse>(res)
+  },
+
   async getMyTravel(): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/travel-arrangements/my-itinerary`, {
       headers: getHeaders(),
@@ -425,6 +467,29 @@ export const api = {
     return handleResponse<TravelArrangementResponse>(res)
   },
 
+  async updateTravel(
+    travelArrangementId: number,
+    data: Partial<{
+      travelAgencyName: string
+      transportMode: string
+      carrierName: string
+      serviceNumber: string
+      departureLocation: string
+      arrivalLocation: string
+      departureTime: string
+      arrivalTime: string
+      seatInfo: string
+      cost: number
+    }>
+  ): Promise<TravelArrangementResponse> {
+    const res = await fetch(`${API_BASE_URL}/travel-arrangements/${travelArrangementId}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<TravelArrangementResponse>(res)
+  },
+
   async updateTravelStatus(travelArrangementId: number, status: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/travel-arrangements/${travelArrangementId}/status`, {
       method: 'PUT',
@@ -432,6 +497,14 @@ export const api = {
       body: JSON.stringify({ status }),
     })
     return handleResponse<any>(res)
+  },
+
+  async deleteTravel(travelArrangementId: number): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/travel-arrangements/${travelArrangementId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    return handleResponse<void>(res)
   },
 
   // Materials
