@@ -1,10 +1,13 @@
 package com.training.logistics.auth.service;
 
 import com.training.logistics.auth.dto.CreateUserRequest;
+import com.training.logistics.auth.dto.ResetPasswordRequest;
+import com.training.logistics.auth.dto.UpdateMyProfileRequest;
 import com.training.logistics.auth.dto.UpdateUserRequest;
 import com.training.logistics.auth.dto.UserResponse;
 import com.training.logistics.auth.exception.UserAlreadyExistsException;
 import com.training.logistics.auth.exception.UserNotFoundException;
+import com.training.logistics.auth.exception.InvalidTokenException;
 import com.training.logistics.auth.model.User;
 import com.training.logistics.auth.model.UserRole;
 import com.training.logistics.auth.model.UserStatus;
@@ -14,6 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,9 +33,39 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(String keyword, UserRole role, UserStatus status, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "userId"));
         return userRepository.findAll(buildSpecification(keyword, role, status), pageRequest)
                 .map(UserResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser() {
+        return UserResponse.from(findCurrentUser());
+    }
+
+    @Transactional
+    public UserResponse updateCurrentUserProfile(UpdateMyProfileRequest request) {
+        User user = findCurrentUser();
+        user.setFullName(request.getFullName().trim());
+
+        String phone = request.getPhone().trim();
+        if (userRepository.existsByPhoneAndUserIdNot(phone, user.getUserId())) {
+            throw new UserAlreadyExistsException("Phone already exists");
+        }
+        user.setPhone(phone);
+
+        return UserResponse.from(user);
+    }
+
+    private User findCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getPrincipal() == null) {
+            throw new InvalidTokenException("Authentication token is required");
+        }
+
+        Long userId = parseUserId(authentication.getPrincipal().toString());
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidTokenException("User not found for token"));
     }
 
     @Transactional(readOnly = true)
@@ -44,12 +79,16 @@ public class UserService {
         if (userRepository.existsByEmail(email)) {
             throw new UserAlreadyExistsException("Email already exists");
         }
+        String phone = request.getPhone().trim();
+        if (userRepository.existsByPhone(phone)) {
+            throw new UserAlreadyExistsException("Phone already exists");
+        }
 
         User user = User.builder()
                 .fullName(request.getFullName().trim())
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .phone(request.getPhone().trim())
+                .phone(phone)
                 .role(request.getRole() == null ? UserRole.BOOKING_STAFF : request.getRole())
                 .status(request.getStatus() == null ? UserStatus.ACTIVE : request.getStatus())
                 .build();
@@ -67,7 +106,7 @@ public class UserService {
 
         if (hasText(request.getEmail())) {
             String email = normalizeEmail(request.getEmail());
-            if (userRepository.existsByEmailAndIdNot(email, id)) {
+            if (userRepository.existsByEmailAndUserIdNot(email, id)) {
                 throw new UserAlreadyExistsException("Email already exists");
             }
             user.setEmail(email);
@@ -78,7 +117,11 @@ public class UserService {
         }
 
         if (hasText(request.getPhone())) {
-            user.setPhone(request.getPhone().trim());
+            String phone = request.getPhone().trim();
+            if (userRepository.existsByPhoneAndUserIdNot(phone, id)) {
+                throw new UserAlreadyExistsException("Phone already exists");
+            }
+            user.setPhone(phone);
         }
 
         if (request.getRole() != null) {
@@ -90,6 +133,12 @@ public class UserService {
         }
 
         return UserResponse.from(user);
+    }
+
+    @Transactional
+    public void resetUserPassword(Long id, ResetPasswordRequest request) {
+        User user = findUserById(id);
+        user.setPasswordHash(passwordEncoder.encode(request.getTemporaryPassword()));
     }
 
     @Transactional
@@ -141,5 +190,13 @@ public class UserService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private Long parseUserId(String subject) {
+        try {
+            return Long.parseLong(subject);
+        } catch (NumberFormatException ex) {
+            throw new InvalidTokenException("Token subject is invalid");
+        }
     }
 }

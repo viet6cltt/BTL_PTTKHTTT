@@ -1,17 +1,13 @@
 package com.training.logistics.auth.controller;
 
 import com.training.logistics.auth.dto.AuthResponse;
+import com.training.logistics.auth.dto.ChangePasswordRequest;
 import com.training.logistics.auth.dto.LoginRequest;
-import com.training.logistics.auth.dto.RegisterRequest;
-import com.training.logistics.auth.dto.TokenValidationRequest;
-import com.training.logistics.auth.dto.TokenValidationResponse;
-import com.training.logistics.auth.dto.UserResponse;
 import com.training.logistics.auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,23 +19,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
 
-    @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
-    }
-
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<UserResponse> getCurrentUser() {
-        return ResponseEntity.ok(authService.getCurrentUser());
-    }
-
-    @PostMapping("/validate-token")
-    public ResponseEntity<TokenValidationResponse> validateToken(@Valid @RequestBody TokenValidationRequest request) {
-        return ResponseEntity.ok(authService.validateToken(request.getToken()));
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(request);
+        return ResponseEntity.noContent().build();
     }
 }
