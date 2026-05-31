@@ -2,7 +2,6 @@ package com.training.logistics.facility_contract.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.JoinColumn;
@@ -29,9 +28,8 @@ public class AvEquipmentReservation {
     private SeminarFacilityContract contract;
 
     @Id
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "equipment_id", nullable = false)
-    private AudioVisualEquipment equipment;
+    @Column(name = "equipment_id", nullable = false)
+    private Long equipmentId;
 
     @Column(name = "quantity_reserved", nullable = false)
     private Integer quantityReserved;

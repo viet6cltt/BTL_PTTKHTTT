@@ -11,5 +11,5 @@ import java.io.Serializable;
 @AllArgsConstructor
 public class AvEquipmentReservationId implements Serializable {
     private Long contract;
-    private Long equipment;
+    private Long equipmentId;
 }

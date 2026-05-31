@@ -12,8 +12,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,11 +40,8 @@ public class Facility {
     @Column(nullable = false, length = 100)
     private String city;
 
-    @Column(length = 20)
-    private String phone;
-
-    @Column(length = 150)
-    private String email;
+    @Column(name = "max_capacity", nullable = false)
+    private Integer maxCapacity;
 
     @Column(name = "sales_manager_name", length = 100)
     private String salesManagerName;
@@ -58,6 +57,10 @@ public class Facility {
 
     @Column(name = "cost_for_each_day", precision = 15, scale = 2)
     private BigDecimal costForEachDay;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
     @Builder.Default
     @OneToMany(mappedBy = "facility", cascade = CascadeType.ALL, orphanRemoval = true)
