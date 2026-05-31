@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
 import { SeminarListPage } from './pages/SeminarListPage'
@@ -11,10 +11,63 @@ import { TopNavbar } from './components/layout/TopNavbar'
 
 export type TabType = 'LIST' | 'CREATE' | 'DETAIL' | 'MY_TRAVEL' | 'ALL_MATERIALS'
 
+type AppRoute = {
+  tab: TabType
+  seminarId: number | null
+}
+
+function parseRoute(pathname: string): AppRoute {
+  if (pathname === '/seminars/new') {
+    return { tab: 'CREATE', seminarId: null }
+  }
+
+  const seminarDetailMatch = pathname.match(/^\/seminars\/(\d+)$/)
+  if (seminarDetailMatch) {
+    return { tab: 'DETAIL', seminarId: Number(seminarDetailMatch[1]) }
+  }
+
+  if (pathname === '/my-travel') {
+    return { tab: 'MY_TRAVEL', seminarId: null }
+  }
+
+  if (pathname === '/materials') {
+    return { tab: 'ALL_MATERIALS', seminarId: null }
+  }
+
+  return { tab: 'LIST', seminarId: null }
+}
+
+function pathForRoute(route: AppRoute) {
+  if (route.tab === 'CREATE') return '/seminars/new'
+  if (route.tab === 'DETAIL' && route.seminarId !== null) return `/seminars/${route.seminarId}`
+  if (route.tab === 'MY_TRAVEL') return '/my-travel'
+  if (route.tab === 'ALL_MATERIALS') return '/materials'
+  return '/seminars'
+}
+
 function AppContent() {
   const { user, isLoading } = useAuth()
-  const [currentTab, setCurrentTab] = useState<TabType>('LIST')
-  const [selectedSeminarId, setSelectedSeminarId] = useState<number | null>(null)
+  const [route, setRoute] = useState<AppRoute>(() => parseRoute(window.location.pathname))
+
+  useEffect(() => {
+    function handlePopState() {
+      setRoute(parseRoute(window.location.pathname))
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  function navigate(nextRoute: AppRoute) {
+    const nextPath = pathForRoute(nextRoute)
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState(null, '', nextPath)
+    }
+    setRoute(nextRoute)
+  }
+
+  const currentTab = route.tab
+  const selectedSeminarId = route.seminarId
 
   if (isLoading) {
     return (
@@ -43,8 +96,7 @@ function AppContent() {
         activeChild={activeSidebarChild}
         currentTab={currentTab}
         onChangeTab={(tab) => {
-          if (tab === 'LIST') setSelectedSeminarId(null)
-          setCurrentTab(tab)
+          navigate({ tab, seminarId: null })
         }}
       />
       <div className="lg:pl-[270px]">
@@ -55,21 +107,20 @@ function AppContent() {
             {currentTab === 'LIST' && (
               <SeminarListPage
                 onSelectSeminar={(id) => {
-                  setSelectedSeminarId(id)
-                  setCurrentTab('DETAIL')
+                  navigate({ tab: 'DETAIL', seminarId: id })
                 }}
                 onCreateSeminarClick={() => {
-                  setCurrentTab('CREATE')
+                  navigate({ tab: 'CREATE', seminarId: null })
                 }}
               />
             )}
             {currentTab === 'CREATE' && (
               <CreateSeminarPage
                 onSaveSuccess={() => {
-                  setCurrentTab('LIST')
+                  navigate({ tab: 'LIST', seminarId: null })
                 }}
                 onCancel={() => {
-                  setCurrentTab('LIST')
+                  navigate({ tab: 'LIST', seminarId: null })
                 }}
               />
             )}
@@ -77,8 +128,7 @@ function AppContent() {
               <SeminarDetailPage
                 seminarId={selectedSeminarId}
                 onBack={() => {
-                  setSelectedSeminarId(null)
-                  setCurrentTab('LIST')
+                  navigate({ tab: 'LIST', seminarId: null })
                 }}
               />
             )}

@@ -31,7 +31,7 @@ public class TravelArrangementController {
     private final TravelArrangementService travelArrangementService;
 
     @PostMapping
-    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR')")
     public ResponseEntity<TravelArrangementResponse> createTravelArrangement(
             @Valid @RequestBody CreateTravelArrangementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -78,7 +78,7 @@ public class TravelArrangementController {
     }
 
     @PutMapping("/{travelArrangementId}")
-    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR')")
     public ResponseEntity<TravelArrangementResponse> updateTravelArrangement(
             @PathVariable Long travelArrangementId,
             @Valid @RequestBody UpdateTravelArrangementRequest request) {
@@ -86,7 +86,7 @@ public class TravelArrangementController {
     }
 
     @PutMapping("/{travelArrangementId}/status")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'CONSULTANT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR', 'CONSULTANT')")
     public ResponseEntity<TravelArrangementResponse> updateTravelArrangementStatus(
             @PathVariable Long travelArrangementId,
             @Valid @RequestBody UpdateTravelArrangementStatusRequest request) {

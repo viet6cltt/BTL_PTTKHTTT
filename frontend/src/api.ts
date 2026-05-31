@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:8080/api/v1'
+const API_ROOT_URL = 'http://localhost:8080'
+const API_BASE_URL = `${API_ROOT_URL}/api/v1`
 
 export type UserRole = 'BOOKING_STAFF' | 'LOGISTICS_COORDINATOR' | 'CONSULTANT' | 'MATERIALS_STAFF' | 'ADMIN'
 
@@ -19,8 +20,8 @@ export interface SeminarResponse {
   consultantFullName: string
   bookingDepartmentUserId: number
   bookingDepartmentUserFullName: string
-  employeeId: number | null
-  employeeFullName: string | null
+  coordinatorId: number | null
+  coordinatorFullName: string | null
   seminarName: string
   startDate: string
   endDate: string
@@ -29,7 +30,7 @@ export interface SeminarResponse {
   anticipatedRegistrants: number
   status: SeminarStatus
   note: string | null
-  bookingCreatedDate: string
+  bookingCreatedDateTime: string
 }
 
 export interface PageResponse<T> {
@@ -155,6 +156,13 @@ export interface FacilityResponse {
   costForEachDay: number
 }
 
+export interface AudioVisualEquipmentResponse {
+  id: number
+  equipmentName: string
+  equipmentType: string
+  unit: string
+}
+
 function getHeaders() {
   const token = localStorage.getItem('token')
   const headers: HeadersInit = {
@@ -205,7 +213,7 @@ export const api = {
     const params = new URLSearchParams()
     if (filters.status) params.append('status', filters.status)
     if (filters.city) params.append('city', filters.city)
-    if (filters.coordinatorId) params.append('coordinatorId', String(filters.coordinatorId))
+    if (filters.coordinatorId !== undefined) params.append('coordinatorId', String(filters.coordinatorId))
     if (filters.page !== undefined) params.append('page', String(filters.page))
     if (filters.size !== undefined) params.append('size', String(filters.size))
 
@@ -266,6 +274,25 @@ export const api = {
     return handleResponse<PageResponse<FacilityResponse>>(res)
   },
 
+  async createFacility(data: {
+    facilityName: string
+    address: string
+    city: string
+    maxCapacity: number
+    salesManagerName?: string
+    salesManagerPhone?: string
+    salesManagerEmail?: string
+    numberOfRoom?: number
+    costForEachDay?: number
+  }): Promise<FacilityResponse> {
+    const res = await fetch(`${API_BASE_URL}/facilities`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<FacilityResponse>(res)
+  },
+
   async createContract(seminarId: number, facilityId: number): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/facility-contracts`, {
       method: 'POST',
@@ -313,7 +340,7 @@ export const api = {
 
   async saveAvEquipmentReservations(data: {
     contractId: number
-    equipmentReservations: { equipmentId: number; quantityReserved: number; costForEachEquipment: number }[]
+    equipments: { equipmentId: number; quantityReserved: number; costForEachEquipment: number }[]
   }): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/reservations/av-equipment`, {
       method: 'POST',
@@ -336,6 +363,29 @@ export const api = {
       body: formData,
     })
     return handleResponse<any>(res)
+  },
+
+  async updateRoomReservation(roomReservationId: number, formData: FormData): Promise<RoomReservation> {
+    const token = localStorage.getItem('token')
+    const headers: HeadersInit = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const res = await fetch(`${API_BASE_URL}/reservations/rooms/${roomReservationId}`, {
+      method: 'PUT',
+      headers,
+      body: formData,
+    })
+    return handleResponse<RoomReservation>(res)
+  },
+
+  async deleteRoomReservation(roomReservationId: number): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/reservations/rooms/${roomReservationId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    return handleResponse<void>(res)
   },
 
   // Travel
@@ -441,5 +491,12 @@ export const api = {
       headers: getHeaders(),
     })
     return handleResponse<PageResponse<any>>(res)
+  },
+
+  async getAudioVisualEquipments(): Promise<AudioVisualEquipmentResponse[]> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/audio-visual-equipments`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<AudioVisualEquipmentResponse[]>(res)
   },
 }

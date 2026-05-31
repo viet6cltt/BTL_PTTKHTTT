@@ -234,7 +234,7 @@ public class TravelArrangementService {
     }
 
     private void ensureCanChangeArrangementStatus(TravelArrangement arrangement) {
-        if (hasAnyRole("ROLE_LOGISTICS_COORDINATOR")) {
+        if (hasAnyRole("ROLE_ADMIN", "ROLE_LOGISTICS_COORDINATOR")) {
             return;
         }
         if (hasAnyRole("ROLE_CONSULTANT") && Objects.equals(arrangement.getConsultantId(), getCurrentConsultantId())) {

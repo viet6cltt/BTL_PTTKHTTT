@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -37,10 +36,7 @@ public class ReservationService {
 
     @Transactional
     public List<AvEquipmentReservationResponse> saveAvEquipmentReservations(SaveAvEquipmentReservationsRequest request) {
-        SeminarFacilityContract contract = contractService.findContract(request.getContractId());
-        if (contract.getStatus() != ContractStatus.APPROVED) {
-            throw new InvalidFacilityContractRequestException("Only APPROVED contracts can store AV reservations");
-        }
+        SeminarFacilityContract contract = getEditableContract(request.getContractId(), "Only PENDING_NEGOTIATE contracts can store AV reservations");
 
         for (AvEquipmentReservationItemRequest item : request.getEquipments()) {
             if (!masterDataClient.existsEquipmentById(item.getEquipmentId())) {
@@ -66,8 +62,7 @@ public class ReservationService {
 
     @Transactional
     public RoomReservationResponse createRoomReservation(CreateRoomReservationRequest request) {
-        SeminarFacilityContract contract = getApprovedContract(request.getContractId());
-        validateAnticipatedRegistrantsCapacity(contract, null, request.getNumSeats());
+        SeminarFacilityContract contract = getEditableContract(request.getContractId(), "Only PENDING_NEGOTIATE contracts can store room reservations");
 
         FacilityRoomReservation reservation = FacilityRoomReservation.builder()
                 .contract(contract)
@@ -83,8 +78,10 @@ public class ReservationService {
     @Transactional
     public RoomReservationResponse updateRoomReservation(Long roomReservationId, UpdateRoomReservationRequest request) {
         FacilityRoomReservation reservation = findRoomReservation(roomReservationId);
-        SeminarFacilityContract contract = getApprovedContract(reservation.getContract().getContractId());
-        validateAnticipatedRegistrantsCapacity(contract, reservation.getRoomReservationId(), request.getNumSeats());
+        SeminarFacilityContract contract = getEditableContract(
+                reservation.getContract().getContractId(),
+                "Approved contracts cannot be changed"
+        );
 
         reservation.setRoomNameSpec(request.getRoomNameSpec().trim());
         reservation.setSeatingArrangement(normalizeBlank(request.getSeatingArrangement()));
@@ -101,7 +98,7 @@ public class ReservationService {
     @Transactional
     public void deleteRoomReservation(Long roomReservationId) {
         FacilityRoomReservation reservation = findRoomReservation(roomReservationId);
-        validateAnticipatedRegistrantsCapacity(reservation.getContract(), reservation.getRoomReservationId(), 0);
+        getEditableContract(reservation.getContract().getContractId(), "Approved contracts cannot be changed");
         deleteExistingRoomImage(reservation.getRoomImageUrl());
         roomReservationRepository.delete(reservation);
     }
@@ -121,10 +118,10 @@ public class ReservationService {
         return FacilityContractMapper.toSeminarReservationResponse(contract);
     }
 
-    private SeminarFacilityContract getApprovedContract(Long contractId) {
+    private SeminarFacilityContract getEditableContract(Long contractId, String message) {
         SeminarFacilityContract contract = contractService.findContract(contractId);
-        if (contract.getStatus() != ContractStatus.APPROVED) {
-            throw new InvalidFacilityContractRequestException("Only APPROVED contracts can store room reservations");
+        if (contract.getStatus() != ContractStatus.PENDING_NEGOTIATE) {
+            throw new InvalidFacilityContractRequestException(message);
         }
         return contract;
     }
@@ -147,30 +144,6 @@ public class ReservationService {
         String objectName = minioStorageService.extractObjectName(roomImageUrl);
         if (objectName != null) {
             minioStorageService.deleteFile(objectName);
-        }
-    }
-
-    private void validateAnticipatedRegistrantsCapacity(
-            SeminarFacilityContract contract,
-            Long roomReservationIdToReplace,
-            int replacementSeats
-    ) {
-        Optional<Integer> anticipatedRegistrants = masterDataClient.getAnticipatedRegistrants(contract.getSeminarId());
-        if (anticipatedRegistrants.isEmpty()) {
-            return;
-        }
-
-        int totalSeats = roomReservationRepository.findByContractContractId(contract.getContractId()).stream()
-                .filter(room -> roomReservationIdToReplace == null || !room.getRoomReservationId().equals(roomReservationIdToReplace))
-                .map(FacilityRoomReservation::getNumSeats)
-                .filter(seats -> seats != null && seats >= 0)
-                .mapToInt(Integer::intValue)
-                .sum() + replacementSeats;
-
-        if (totalSeats < anticipatedRegistrants.get()) {
-            throw new InvalidFacilityContractRequestException(
-                    "Total reserved room seats must cover anticipated registrants: " + anticipatedRegistrants.get()
-            );
         }
     }
 

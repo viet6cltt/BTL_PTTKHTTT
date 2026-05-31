@@ -33,15 +33,15 @@ export type SeminarResponse = {
   consultantFullName: string
   bookingDepartmentUserId: number
   bookingDepartmentUserFullName: string
-  employeeId: number | null
-  employeeFullName: string | null
+  coordinatorId: number | null
+  coordinatorFullName: string | null
   seminarName: string
   startDate: string
   endDate: string
   city: string
   anticipatedRegistrants: number
   note: string | null
-  bookingCreatedDate: string
+  bookingCreatedDateTime: string
 }
 
 export type SeminarDetail = SeminarResponse & {

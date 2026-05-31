@@ -9,6 +9,7 @@ import {
   MapPin,
   Package2,
   PackageCheck,
+  PieChart,
   Phone,
   Plane,
   PlusCircle,
@@ -45,19 +46,31 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'INFO' | 'CONTRACT' | 'TRAVEL' | 'MATERIALS'>('INFO')
+  const [activeTab, setActiveTab] = useState<'INFO' | 'CONTRACT' | 'TRAVEL' | 'MATERIALS' | 'REPORT'>('INFO')
 
   // Modals & Sub-forms
   const [isAssigning, setIsAssigning] = useState(false)
-  const [isCreatingContract, setIsCreatingContract] = useState(false)
   const [isApprovingContract, setIsApprovingContract] = useState(false)
   const [isAddingTravel, setIsAddingTravel] = useState(false)
   const [isCreatingMaterials, setIsCreatingMaterials] = useState(false)
+  const [isCreatingFacility, setIsCreatingFacility] = useState(false)
+  const [showFacilityForm, setShowFacilityForm] = useState(false)
   
   // Form fields
   const [scannedFile, setScannedFile] = useState<File | null>(null)
   const [finalCost, setFinalCost] = useState<string>('')
   const [contractNotes, setContractNotes] = useState<string>('')
+
+  // Facility fields
+  const [facilityName, setFacilityName] = useState('')
+  const [facilityAddress, setFacilityAddress] = useState('')
+  const [facilityCity, setFacilityCity] = useState('')
+  const [facilityCapacity, setFacilityCapacity] = useState('')
+  const [facilitySalesName, setFacilitySalesName] = useState('')
+  const [facilitySalesPhone, setFacilitySalesPhone] = useState('')
+  const [facilitySalesEmail, setFacilitySalesEmail] = useState('')
+  const [facilityRoomCount, setFacilityRoomCount] = useState('')
+  const [facilityDailyCost, setFacilityDailyCost] = useState('')
 
   // Travel fields
   const [transportMode, setTransportMode] = useState<string>('FLIGHT')
@@ -122,7 +135,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
           })
           setMaterialsQuantities(initialQuants)
 
-          const facs = await api.searchFacilities(sem.city)
+          const facs = await api.searchFacilities(sem.city, sem.anticipatedRegistrants)
           setFacilities(facs.content || [])
         } catch {
           // Ignore background load failures
@@ -167,10 +180,50 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
       setErrorMsg(null)
       await api.createContract(seminar.id, facilityId)
       setSuccessMsg('Khởi tạo hợp đồng địa điểm thành công! Hãy bổ sung phòng nghỉ & vật tư.')
-      setIsCreatingContract(false)
       await loadAllLogisticsData()
     } catch (err: any) {
       setErrorMsg(err.message || 'Không thể tạo hợp đồng nháp.')
+    }
+  }
+
+  async function handleCreateFacilitySubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!seminar || !facilityName || !facilityAddress || !facilityCity || !facilityCapacity) {
+      setErrorMsg('Vui lòng nhập tên, địa chỉ, thành phố và sức chứa của địa điểm.')
+      return
+    }
+
+    try {
+      setIsCreatingFacility(true)
+      setErrorMsg(null)
+      const created = await api.createFacility({
+        facilityName,
+        address: facilityAddress,
+        city: facilityCity,
+        maxCapacity: Number(facilityCapacity),
+        salesManagerName: facilitySalesName || undefined,
+        salesManagerPhone: facilitySalesPhone || undefined,
+        salesManagerEmail: facilitySalesEmail || undefined,
+        numberOfRoom: facilityRoomCount ? Number(facilityRoomCount) : undefined,
+        costForEachDay: facilityDailyCost ? Number(facilityDailyCost) : undefined,
+      })
+
+      setFacilities((current) => [created, ...current])
+      setFacilityName('')
+      setFacilityAddress('')
+      setFacilityCity(seminar.city)
+      setFacilityCapacity(String(seminar.anticipatedRegistrants))
+      setFacilitySalesName('')
+      setFacilitySalesPhone('')
+      setFacilitySalesEmail('')
+      setFacilityRoomCount('')
+      setFacilityDailyCost('')
+      setShowFacilityForm(false)
+      setSuccessMsg('Đã thêm địa điểm tổ chức thủ công vào danh sách lựa chọn.')
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Không thể tạo địa điểm tổ chức.')
+    } finally {
+      setIsCreatingFacility(false)
     }
   }
 
@@ -303,11 +356,22 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
   // Role permissions helpers
   const isBookingStaff = user?.role === 'BOOKING_STAFF' || user?.role === 'ADMIN'
-  const isCoordinator = user?.role === 'LOGISTICS_COORDINATOR' || user?.role === 'ADMIN'
+  const isCoordinatorRole = user?.role === 'LOGISTICS_COORDINATOR'
+  const canManageSeminarLogistics =
+    user?.role === 'ADMIN' || (isCoordinatorRole && seminar.coordinatorId === user.userId)
   const isConsultant = user?.role === 'CONSULTANT'
   const isMaterialsStaff = user?.role === 'MATERIALS_STAFF' || user?.role === 'ADMIN'
 
-  const hasCoordinatorAssigned = seminar.employeeId !== null
+  const hasCoordinatorAssigned = seminar.coordinatorId !== null
+  const facilityCost = reservation?.totalCost || 0
+  const travelCostTotal = travelList.reduce((total, item) => total + (item.cost || 0), 0)
+  const materialItemCount = materialsList.reduce(
+    (total, request) =>
+      total + request.items.reduce((requestTotal, item) => requestTotal + item.requestedQuantity, 0),
+    0,
+  )
+  const estimatedMaterialCost = materialItemCount * 15000
+  const estimatedGrandTotal = facilityCost + travelCostTotal + estimatedMaterialCost
 
   return (
     <div className="space-y-6">
@@ -375,10 +439,11 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
       {/* Tab Selectors */}
       <div className="flex border-b border-slate-200 bg-white/40 p-1.5 rounded-xl border">
         {[
-          { id: 'INFO', label: 'Hồ sơ Seminar', icon: FileText },
-          { id: 'CONTRACT', label: 'Hợp đồng Khách sạn', icon: Building2 },
-          { id: 'TRAVEL', label: 'Di chuyển & Vé xe', icon: Plane },
-          { id: 'MATERIALS', label: 'Vận chuyển Học liệu', icon: Package2 },
+          { id: 'INFO', label: 'Tổng quan', icon: FileText },
+          { id: 'CONTRACT', label: 'Địa điểm', icon: Building2 },
+          { id: 'TRAVEL', label: 'Di chuyển', icon: Plane },
+          { id: 'MATERIALS', label: 'Học liệu', icon: Package2 },
+          { id: 'REPORT', label: 'Tổng kết chi phí', icon: PieChart },
         ].map((t) => {
           const Icon = t.icon
           return (
@@ -416,7 +481,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                 <DetailField label="Phân loại học phần" value={seminar.seminarTypeName} />
                 <DetailField label="Thành phố tổ chức" value={seminar.city} />
                 <DetailField label="Chuyên gia phụ trách" value={seminar.consultantFullName} />
-                <DetailField label="Người điều phối (Logistics)" value={seminar.employeeFullName || 'Chưa phân công'} />
+                <DetailField label="Người điều phối (Logistics)" value={seminar.coordinatorFullName || 'Chưa phân công'} />
                 <DetailField label="Ngày khai giảng" value={formatDate(seminar.startDate)} />
                 <DetailField label="Ngày kết thúc" value={formatDate(seminar.endDate)} />
                 <DetailField label="Học viên dự kiến" value={`${seminar.anticipatedRegistrants} người`} />
@@ -447,53 +512,106 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               </div>
 
               {!reservation?.contractId ? (
-                <div className="py-8 text-center space-y-4">
-                  <p className="text-sm text-slate-500">Seminar này chưa có hợp đồng địa điểm.</p>
-                  {isCoordinator && (
-                    <div>
-                      {!isCreatingContract ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                    <p className="text-xs font-bold text-amber-800">
+                      ⚠️ Seminar này chưa được ký kết địa điểm tổ chức (Khách sạn/Hội trường).
+                    </p>
+                  </div>
+                  {canManageSeminarLogistics && (
+                    <div className="border border-slate-200 rounded-2xl p-6 bg-slate-50/50 space-y-4 text-left">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-[#0B3970] flex items-center gap-1.5">
+                          <Building2 className="h-4 w-4 text-[#126CB0]" />
+                          Danh sách địa điểm phù hợp ở {seminar.city} (Sức chứa &gt;= {seminar.anticipatedRegistrants} người)
+                        </h4>
                         <button
                           type="button"
-                          onClick={() => setIsCreatingContract(true)}
-                          className="inline-flex items-center gap-2 rounded-xl bg-[#0B3970] px-5 py-3 text-xs font-black text-white shadow-md hover:bg-[#126CB0] transition"
+                          onClick={() => {
+                            setFacilityCity(seminar.city)
+                            setFacilityCapacity(String(seminar.anticipatedRegistrants))
+                            setShowFacilityForm((current) => !current)
+                          }}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#0B3970] bg-white px-4 py-2.5 text-xs font-black text-[#0B3970] transition hover:bg-[#0B3970] hover:text-white"
                         >
                           <PlusCircle className="h-4 w-4" />
-                          Thuê khách sạn & Tạo hợp đồng
+                          Thêm địa điểm thủ công
                         </button>
-                      ) : (
-                        <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-4 text-left">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-[#0B3970]">Danh sách khách sạn đối tác ở {seminar.city}</h4>
-                          <div className="space-y-2">
-                            {facilities.length > 0 ? (
-                              facilities.map((f) => (
-                                <div key={f.facilityId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between border p-3 rounded-lg bg-white gap-3">
-                                  <div>
-                                    <h5 className="text-xs font-black text-[#0B3970]">{f.facilityName}</h5>
-                                    <p className="text-[11px] text-slate-400 mt-0.5">{f.address}</p>
-                                    <p className="text-[10px] text-slate-500 font-bold mt-1">Sức chứa tối đa: {f.maxCapacity} người • Đơn giá: {f.costForEachDay.toLocaleString('vi-VN')}đ / ngày</p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectHotel(f.facilityId)}
-                                    className="rounded-lg bg-teal-500 px-3 py-1.5 text-[11px] font-black text-white hover:bg-teal-600 transition"
-                                  >
-                                    Chọn khách sạn này
-                                  </button>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-xs text-slate-400">Không có khách sạn nào được đăng ký ở {seminar.city}.</p>
-                            )}
+                      </div>
+
+                      {showFacilityForm && (
+                        <form onSubmit={handleCreateFacilitySubmit} className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm space-y-4">
+                          <div>
+                            <h5 className="text-sm font-black text-[#0B3970]">Thông tin địa điểm mới</h5>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              Coordinator có thể nhập nhanh địa điểm chưa có trong danh mục để tạo hợp đồng cho seminar này.
+                            </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setIsCreatingContract(false)}
-                            className="text-xs font-extrabold text-slate-500 hover:text-slate-700"
-                          >
-                            Hủy bỏ
-                          </button>
-                        </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <FacilityInput label="Tên địa điểm *" value={facilityName} onChange={setFacilityName} placeholder="VD: Khách sạn Sunlight Convention" />
+                            <FacilityInput label="Thành phố *" value={facilityCity} onChange={setFacilityCity} placeholder="VD: Hà Nội" />
+                            <div className="md:col-span-2">
+                              <FacilityInput label="Địa chỉ *" value={facilityAddress} onChange={setFacilityAddress} placeholder="VD: 12 Nguyễn Văn Cừ, Long Biên" />
+                            </div>
+                            <FacilityInput label="Sức chứa tối đa *" type="number" value={facilityCapacity} onChange={setFacilityCapacity} placeholder="VD: 80" />
+                            <FacilityInput label="Số phòng họp" type="number" value={facilityRoomCount} onChange={setFacilityRoomCount} placeholder="VD: 3" />
+                            <FacilityInput label="Chi phí/ngày (VNĐ)" type="number" value={facilityDailyCost} onChange={setFacilityDailyCost} placeholder="VD: 4500000" />
+                            <FacilityInput label="Tên sales phụ trách" value={facilitySalesName} onChange={setFacilitySalesName} placeholder="VD: Nguyễn Minh Anh" />
+                            <FacilityInput label="SĐT sales" value={facilitySalesPhone} onChange={setFacilitySalesPhone} placeholder="VD: 0901234567" />
+                            <FacilityInput label="Email sales" type="email" value={facilitySalesEmail} onChange={setFacilitySalesEmail} placeholder="sales@hotel.vn" />
+                          </div>
+
+                          <div className="flex flex-wrap justify-end gap-3 pt-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowFacilityForm(false)}
+                              className="rounded-lg px-4 py-2 text-xs font-black text-slate-500 transition hover:bg-slate-100"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isCreatingFacility}
+                              className="rounded-lg bg-teal-600 px-4 py-2 text-xs font-black text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                            >
+                              {isCreatingFacility ? 'Đang lưu...' : 'Lưu địa điểm'}
+                            </button>
+                          </div>
+                        </form>
                       )}
+
+                      <div className="space-y-3">
+                        {facilities.length > 0 ? (
+                          facilities.map((f) => (
+                            <div key={f.facilityId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between border border-slate-100 p-4 rounded-xl bg-white gap-4 shadow-sm hover:shadow-md transition">
+                              <div>
+                                <h5 className="text-sm font-extrabold text-[#0B3970]">{f.facilityName}</h5>
+                                <p className="text-xs text-slate-400 mt-1">{f.address}</p>
+                                <div className="flex flex-wrap items-center gap-3 mt-2">
+                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                                    Sức chứa: {f.maxCapacity} người
+                                  </span>
+                                  <span className="inline-flex items-center rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700">
+                                    Đơn giá: {f.costForEachDay.toLocaleString('vi-VN')} VNĐ / ngày
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSelectHotel(f.facilityId)}
+                                className="rounded-xl bg-[#0B3970] px-4 py-2.5 text-xs font-black text-white hover:bg-[#126CB0] transition shadow-md shadow-slate-900/10 cursor-pointer shrink-0"
+                              >
+                                Tiến hành đàm phán
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="py-6 text-center text-xs text-slate-400 bg-white border rounded-xl">
+                            Không tìm thấy địa điểm nào ở {seminar.city} phù hợp với sức chứa tối thiểu {seminar.anticipatedRegistrants} người.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -573,7 +691,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                   </div>
 
                   {/* Approve Contract Form for Coordinator */}
-                  {isCoordinator && reservation.contractStatus === 'PENDING_NEGOTIATE' && (
+                  {canManageSeminarLogistics && reservation.contractStatus === 'PENDING_NEGOTIATE' && (
                     <div className="border-t border-slate-100 pt-5 space-y-4">
                       {!isApprovingContract ? (
                         <button
@@ -660,7 +778,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               {travelList.length === 0 ? (
                 <div className="py-8 text-center space-y-4">
                   <p className="text-sm text-slate-500">Chưa có thông tin vé tàu/máy bay nào được lên lịch đưa đón chuyên gia.</p>
-                  {isCoordinator && (
+                  {canManageSeminarLogistics && (
                     <div>
                       {!isAddingTravel ? (
                         <button
@@ -879,7 +997,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                   ))}
 
                   {/* Add more travel options for Coordinator */}
-                  {isCoordinator && (
+                  {canManageSeminarLogistics && (
                     <div className="pt-2">
                       <button
                         type="button"
@@ -909,7 +1027,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               {materialsList.length === 0 ? (
                 <div className="py-8 text-center space-y-4">
                   <p className="text-sm text-slate-500">Seminar này chưa được lập yêu cầu vật tư/giáo trình học viên gửi tới khách sạn.</p>
-                  {isCoordinator && previewRequirements && (
+                  {canManageSeminarLogistics && previewRequirements && (
                     <div>
                       {!isCreatingMaterials ? (
                         <button
@@ -1092,7 +1210,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                         )}
 
                         {/* Coordinator receipt verification */}
-                        {isCoordinator && m.shipmentStatus === 'DELIVERED' && !m.deliveredConfirmedAt && (
+                        {canManageSeminarLogistics && m.shipmentStatus === 'DELIVERED' && !m.deliveredConfirmedAt && (
                           <div className="border-t border-slate-100 pt-3 flex justify-end">
                             <button
                               type="button"
@@ -1110,6 +1228,51 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'REPORT' && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 space-y-6 text-left">
+              <div className="flex items-center gap-2.5 text-[#0B3970] border-b border-slate-100 pb-4">
+                <PieChart className="h-5.5 w-5.5 text-[#126CB0]" />
+                <h2 className="text-base font-black">Báo cáo & Tổng kết chi phí</h2>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <CostCard
+                  label="Chi phí địa điểm"
+                  value={facilityCost}
+                  note={reservation?.contractStatus === 'APPROVED' ? 'Theo hợp đồng đã duyệt' : 'Chưa có hợp đồng đã duyệt'}
+                />
+                <CostCard
+                  label="Chi phí di chuyển"
+                  value={travelCostTotal}
+                  note={`${travelList.length} lịch trình đã nhập`}
+                />
+                <CostCard
+                  label="Chi phí học liệu"
+                  value={estimatedMaterialCost}
+                  note={`${materialItemCount} đơn vị x 15.000 VNĐ tạm tính`}
+                />
+              </div>
+
+              <div className="rounded-2xl border border-[#0B3970]/15 bg-[#F5FAFF] p-6">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">Tổng chi phí dự kiến</p>
+                <p className="mt-2 text-3xl font-black text-[#0B3970]">
+                  {formatCurrency(estimatedGrandTotal)}
+                </p>
+                <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
+                  Chi phí học liệu hiện là tạm tính ở FE vì API material_request chưa trả đơn giá in ấn/vật tư.
+                  Khi BE bổ sung đơn giá, phần tổng kết này có thể dùng trực tiếp số liệu thật.
+                </p>
+              </div>
+
+              <div className="grid gap-3 text-xs font-bold text-slate-600">
+                <ReportRow label="Địa điểm tổ chức" value={reservation?.facilityName || 'Chưa chọn địa điểm'} />
+                <ReportRow label="Trạng thái hợp đồng" value={reservation?.contractStatus || 'Chưa tạo hợp đồng'} />
+                <ReportRow label="Lịch trình di chuyển" value={`${travelList.filter((t) => t.travelArrangementStatus === 'CONFIRMED').length}/${travelList.length} đã xác nhận`} />
+                <ReportRow label="Yêu cầu học liệu" value={`${materialsList.length} yêu cầu, ${materialItemCount} đơn vị vật tư/học liệu`} />
+              </div>
             </div>
           )}
 
@@ -1208,6 +1371,52 @@ function DetailField({ label, value, wide }: DetailFieldProps) {
       <div className="mt-1.5 min-h-5 text-sm font-bold text-[#18395F]">{value}</div>
     </div>
   )
+}
+
+type FacilityInputProps = {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  type?: string
+}
+
+function FacilityInput({ label, value, onChange, placeholder, type = 'text' }: FacilityInputProps) {
+  return (
+    <label className="flex flex-col gap-1.5 text-xs">
+      <span className="font-extrabold text-slate-600">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden focus:border-[#1788A7] focus:ring-2 focus:ring-[#36F1D1]/25"
+      />
+    </label>
+  )
+}
+
+function CostCard({ label, value, note }: { label: string; value: number; note: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-[#F8FBFF] p-5">
+      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-2 text-xl font-black text-[#0B3970]">{formatCurrency(value)}</p>
+      <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{note}</p>
+    </div>
+  )
+}
+
+function ReportRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-slate-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-slate-500">{label}</span>
+      <span className="font-black text-[#18395F]">{value}</span>
+    </div>
+  )
+}
+
+function formatCurrency(value: number) {
+  return `${value.toLocaleString('vi-VN')} VNĐ`
 }
 
 function formatDate(isoDate: string) {
