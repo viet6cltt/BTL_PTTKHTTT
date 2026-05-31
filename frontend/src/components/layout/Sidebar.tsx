@@ -24,7 +24,11 @@ const navigation: NavItem[] = [
   { label: 'Báo cáo', icon: ChartNoAxesColumnIncreasing },
 ]
 
-export function Sidebar() {
+type SidebarProps = {
+  activeChild?: string
+}
+
+export function Sidebar({ activeChild = 'Danh sách seminar' }: SidebarProps) {
   return (
     <aside className="bg-[#093C5D] text-white shadow-2xl lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-[270px]">
       <div className="flex h-22 items-center gap-4 border-b border-white/15 px-7">
@@ -49,7 +53,7 @@ export function Sidebar() {
               <div
                 className={`flex items-center gap-4 rounded-xl px-4 py-4 text-[15px] transition ${
                   item.active
-                    ? 'border-l-4 border-[#36F1D1] bg-[#0D5A84]/80 text-[#4EF7DC] shadow-lg shadow-cyan-950/20'
+                    ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
                     : 'text-white/90 hover:bg-white/10'
                 }`}
               >
@@ -66,8 +70,8 @@ export function Sidebar() {
                     <div
                       key={child}
                       className={`flex items-center gap-5 rounded-xl px-3 py-3 text-sm ${
-                        child === 'Tạo seminar mới'
-                          ? 'bg-[#0D5A84] text-[#4EF7DC]'
+                        child === activeChild
+                          ? 'bg-[#0D5A84] text-[#5DF8D8]'
                           : 'text-white/90'
                       }`}
                     >

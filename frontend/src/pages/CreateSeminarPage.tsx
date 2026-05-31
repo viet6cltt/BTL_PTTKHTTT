@@ -38,7 +38,7 @@ export function CreateSeminarPage() {
 
   return (
     <div className="min-h-screen bg-[#F5FAFF] font-sans text-[#18395F]">
-      <Sidebar />
+      <Sidebar activeChild="Tạo seminar mới" />
       <div className="lg:pl-[270px]">
         <TopNavbar />
         <main className="relative overflow-hidden px-6 py-8 md:px-8 lg:px-6 xl:px-8">
