@@ -50,7 +50,6 @@ export function MaterialMasterDataPage() {
 
   return (
     <MasterDataPageLayout
-      activeChild="Vật tư"
       title="Quản lý vật tư"
       description="Theo dõi danh mục vật tư dùng cho yêu cầu chuẩn bị seminar"
       icon={<Package className="h-10 w-10" strokeWidth={2.4} />}

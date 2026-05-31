@@ -71,7 +71,6 @@ export function SeminarTypeDetailPage() {
 
   return (
     <MasterDataPageLayout
-      activeChild="Loại seminar"
       title="Chi tiết loại seminar"
       description="Theo dõi cấu hình vật tư và thiết bị nghe nhìn cần chuẩn bị"
       icon={<ListChecks className="h-10 w-10" strokeWidth={2.4} />}

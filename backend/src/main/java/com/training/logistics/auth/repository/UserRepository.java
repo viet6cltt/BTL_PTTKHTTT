@@ -2,6 +2,18 @@ package com.training.logistics.auth.repository;
 
 import com.training.logistics.auth.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+import java.util.Optional;
+
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+    Optional<User> findByEmail(String email);
+
+    boolean existsByEmail(String email);
+
+    boolean existsByEmailAndUserIdNot(String email, Long userId);
+
+    boolean existsByPhone(String phone);
+
+    boolean existsByPhoneAndUserIdNot(String phone, Long userId);
 }

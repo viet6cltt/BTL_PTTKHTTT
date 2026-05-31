@@ -10,6 +10,7 @@ import com.training.logistics.masterdata.repository.MaterialRequirementRepositor
 import com.training.logistics.materialrequest.dto.request.ConfirmDeliveryRequest;
 import com.training.logistics.materialrequest.dto.request.MaterialRequestCreateRequest;
 import com.training.logistics.materialrequest.dto.request.MaterialRequestItemRequest;
+import com.training.logistics.materialrequest.dto.request.UpdateShipmentStatusRequest;
 import com.training.logistics.materialrequest.dto.response.MaterialRequestItemResponse;
 import com.training.logistics.materialrequest.dto.response.MaterialRequestResponse;
 import com.training.logistics.materialrequest.model.MaterialRequest;
@@ -23,6 +24,8 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -95,8 +98,23 @@ public class MaterialRequestService {
         return toResponse(materialRequestRepository.save(materialRequest));
     }
 
+    public MaterialRequestResponse updateShipmentStatus(Long id, UpdateShipmentStatusRequest request) {
+        MaterialRequest materialRequest = findEntity(id);
+        ShipmentStatus newStatus = request.shipmentStatus();
+        if (newStatus == ShipmentStatus.DELIVERED) {
+            throw new BadRequestException("Use confirm-delivered endpoint to mark a request as DELIVERED");
+        }
+        if (ShipmentStatus.DELIVERED.equals(materialRequest.getShipmentStatus())) {
+            throw new ConflictException("Delivered material request cannot change shipment status");
+        }
+
+        materialRequest.setShipmentStatus(newStatus);
+        return toResponse(materialRequestRepository.saveAndFlush(materialRequest));
+    }
+
     public MaterialRequestResponse confirmDelivered(Long id, ConfirmDeliveryRequest request) {
         MaterialRequest materialRequest = findEntity(id);
+        ensureCurrentCoordinatorOwnsSeminar(materialRequest.getSeminar());
         if (ShipmentStatus.DELIVERED.equals(materialRequest.getShipmentStatus())) {
             throw new ConflictException("Material request has already been delivered");
         }
@@ -179,6 +197,29 @@ public class MaterialRequestService {
         }
         return seminarRepository.findById(seminarId)
                 .orElseThrow(() -> new ResourceNotFoundException("Seminar not found: " + seminarId));
+    }
+
+    private void ensureCurrentCoordinatorOwnsSeminar(Seminar seminar) {
+        if (seminar.getCoordinator() == null) {
+            throw new ConflictException("Seminar has not been assigned to a logistics coordinator");
+        }
+        Long currentUserId = getCurrentUserId();
+        if (!seminar.getCoordinator().getUserId().equals(currentUserId)) {
+            throw new ConflictException("Only the assigned logistics coordinator can perform this action");
+        }
+    }
+
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new BadRequestException("Authentication is required");
+        }
+
+        try {
+            return Long.parseLong(authentication.getName());
+        } catch (NumberFormatException ex) {
+            throw new BadRequestException("Current user id is invalid");
+        }
     }
 
     private Material requireMaterial(Long materialId) {

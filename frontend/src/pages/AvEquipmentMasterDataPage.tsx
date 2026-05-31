@@ -50,7 +50,6 @@ export function AvEquipmentMasterDataPage() {
 
   return (
     <MasterDataPageLayout
-      activeChild="Thiết bị nghe nhìn"
       title="Quản lý thiết bị nghe nhìn"
       description="Theo dõi danh mục thiết bị phục vụ phòng seminar"
       icon={<MonitorCog className="h-10 w-10" strokeWidth={2.4} />}
