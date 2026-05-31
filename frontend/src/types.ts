@@ -43,3 +43,15 @@ export type SeminarResponse = {
   note: string | null
   bookingCreatedDate: string
 }
+
+export type SeminarDetail = SeminarResponse & {
+  contractId: number | null
+  contractStatus: 'NOT_CREATED' | 'CREATED' | 'SIGNED'
+  travelArrangementStatus: 'NOT_SCHEDULED' | 'SCHEDULED'
+  materialRequestStatus: 'NOT_REQUESTED' | 'REQUESTED' | 'DELIVERED'
+  consultantRole: string
+  consultantPhone: string
+  consultantEmail: string
+  consultantCity: string
+  consultantCountry: string
+}

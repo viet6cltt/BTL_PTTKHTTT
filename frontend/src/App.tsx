@@ -1,7 +1,7 @@
-import { SeminarListPage } from './pages/SeminarListPage'
+import { SeminarDetailPage } from './pages/SeminarDetailPage'
 
 function App() {
-  return <SeminarListPage />
+  return <SeminarDetailPage />
 }
 
 export default App
