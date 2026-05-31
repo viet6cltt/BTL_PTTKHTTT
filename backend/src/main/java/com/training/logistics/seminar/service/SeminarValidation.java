@@ -15,6 +15,13 @@ final class SeminarValidation {
         return value.trim();
     }
 
+    static String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
     static Integer requirePositive(Integer value, String fieldName) {
         if (value == null || value <= 0) {
             throw new BadRequestException(fieldName + " must be positive");

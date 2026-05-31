@@ -78,12 +78,13 @@ public class SeminarService {
                 seminar,
                 request.seminarTypeId(),
                 request.consultantId(),
-                request.employeeId(),
+                null,
                 request.seminarName(),
                 startDate,
                 endDate,
                 request.city(),
-                request.anticipatedRegistrants()
+                request.anticipatedRegistrants(),
+                request.note()
         );
         return toResponse(seminarRepository.save(seminar));
     }
@@ -103,7 +104,8 @@ public class SeminarService {
                 startDate,
                 endDate,
                 request.city(),
-                request.anticipatedRegistrants()
+                request.anticipatedRegistrants(),
+                request.note()
         );
         return toResponse(seminarRepository.save(seminar));
     }
@@ -149,11 +151,12 @@ public class SeminarService {
             LocalDate startDate,
             LocalDate endDate,
             String city,
-            Integer anticipatedRegistrants
+            Integer anticipatedRegistrants,
+            String note
     ) {
         seminar.setSeminarType(requireSeminarType(seminarTypeId));
         seminar.setConsultant(requireConsultant(consultantId));
-        seminar.setEmployee(requireUser(employeeId, "Employee"));
+        seminar.setEmployee(requireNullableUser(employeeId, "Employee"));
         seminar.setSeminarName(SeminarValidation.requireNotBlank(seminarName, "seminarName"));
         seminar.setStartDate(startDate);
         seminar.setEndDate(endDate);
@@ -161,6 +164,7 @@ public class SeminarService {
         seminar.setAnticipatedRegistrants(
                 SeminarValidation.requirePositive(anticipatedRegistrants, "anticipatedRegistrants")
         );
+        seminar.setNote(SeminarValidation.trimToNull(note));
     }
 
     private Seminar findEntity(Long id) {
@@ -183,6 +187,13 @@ public class SeminarService {
                 .orElseThrow(() -> new ResourceNotFoundException(label + " not found: " + userId));
     }
 
+    private User requireNullableUser(Long userId, String label) {
+        if (userId == null) {
+            return null;
+        }
+        return requireUser(userId, label);
+    }
+
     private SeminarResponse toResponse(Seminar seminar) {
         SeminarType seminarType = seminar.getSeminarType();
         Consultant consultant = seminar.getConsultant();
@@ -196,13 +207,14 @@ public class SeminarService {
                 consultant.getFullName(),
                 bookingDepartmentUser.getId(),
                 bookingDepartmentUser.getFullName(),
-                employee.getId(),
-                employee.getFullName(),
+                employee == null ? null : employee.getId(),
+                employee == null ? null : employee.getFullName(),
                 seminar.getSeminarName(),
                 seminar.getStartDate(),
                 seminar.getEndDate(),
                 seminar.getCity(),
                 seminar.getAnticipatedRegistrants(),
+                seminar.getNote(),
                 seminar.getBookingCreatedDate()
         );
     }

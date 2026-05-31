@@ -8,11 +8,12 @@ import java.time.LocalDate;
 public record SeminarUpdateRequest(
         @NotNull Long seminarTypeId,
         @NotNull Long consultantId,
-        @NotNull Long employeeId,
+        Long employeeId,
         @NotBlank String seminarName,
         @NotNull LocalDate startDate,
         @NotNull LocalDate endDate,
         @NotBlank String city,
-        @NotNull @Positive Integer anticipatedRegistrants
+        @NotNull @Positive Integer anticipatedRegistrants,
+        String note
 ) {
 }

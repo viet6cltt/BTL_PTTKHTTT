@@ -68,6 +68,9 @@ public class Seminar {
     @Column(name = "anticipated_registrants")
     private Integer anticipatedRegistrants;
 
+    @Column(name = "note")
+    private String note;
+
     @Column(name = "booking_created_date")
     private LocalDate bookingCreatedDate;
 }
