@@ -117,8 +117,8 @@ export interface TravelArrangementResponse {
   seatInfo: string | null
   cost: number | null
   confirmationSentDatetime: string | null
-  status?: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
-  travelArrangementStatus?: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+  status?: TravelArrangementStatus
+  travelArrangementStatus?: TravelArrangementStatus
 }
 
 export interface TravelFacilityInfoResponse {
@@ -134,7 +134,48 @@ export interface TravelItineraryResponse {
   arrangements: TravelArrangementResponse[]
   facilityReservations: TravelFacilityInfoResponse[]
   totalCost: number
-  overallStatus: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+  overallStatus: TravelArrangementStatus
+}
+
+export type TravelArrangementStatus = 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+
+export interface ConsultantResponse {
+  consultantId: number
+  userId: number
+  fullName: string
+  email: string
+  phone: string | null
+  specialty: string | null
+  travelPreference: string | null
+  address: string | null
+  city: string | null
+  country: string | null
+}
+
+export interface UpdateMyConsultantProfileRequest {
+  travelPreference?: string | null
+  address?: string | null
+  city?: string | null
+  country?: string | null
+}
+
+export interface FacilityCreateRequest {
+  facilityName: string
+  address: string
+  city: string
+  maxCapacity: number
+  salesManagerName?: string
+  salesManagerPhone?: string
+  salesManagerEmail?: string
+  numberOfRoom?: number
+  costForEachDay?: number
+}
+
+export interface AudioVisualEquipmentResponse {
+  id: number
+  equipmentName: string
+  equipmentType: string
+  unit: string
 }
 
 export interface MaterialRequestItem {
@@ -282,6 +323,15 @@ export const api = {
       headers: getHeaders(),
     })
     return handleResponse<PageResponse<FacilityResponse>>(res)
+  },
+
+  async createFacility(data: FacilityCreateRequest): Promise<FacilityResponse> {
+    const res = await fetch(`${API_BASE_URL}/facilities`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<FacilityResponse>(res)
   },
 
   async createContract(seminarId: number, facilityId: number): Promise<any> {
@@ -510,11 +560,27 @@ export const api = {
     return handleResponse<any[]>(res)
   },
 
-  async getConsultants(): Promise<PageResponse<any>> {
+  async getConsultants(): Promise<PageResponse<ConsultantResponse>> {
     const res = await fetch(`${API_BASE_URL}/consultants`, {
       headers: getHeaders(),
     })
-    return handleResponse<PageResponse<any>>(res)
+    return handleResponse<PageResponse<ConsultantResponse>>(res)
+  },
+
+  async getConsultantById(consultantId: number): Promise<ConsultantResponse> {
+    const res = await fetch(`${API_BASE_URL}/consultants/${consultantId}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<ConsultantResponse>(res)
+  },
+
+  async updateMyConsultantProfile(data: UpdateMyConsultantProfileRequest): Promise<ConsultantResponse> {
+    const res = await fetch(`${API_BASE_URL}/consultants/me`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<ConsultantResponse>(res)
   },
 
   async getAudioVisualEquipments(): Promise<AudioVisualEquipmentResponse[]> {
