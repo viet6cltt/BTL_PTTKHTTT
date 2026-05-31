@@ -1,7 +1,6 @@
 package com.training.logistics.travel.mapper;
 
 import com.training.logistics.travel.dto.CreateTravelArrangementRequest;
-import com.training.logistics.travel.dto.FinalizeTravelArrangementResponse;
 import com.training.logistics.travel.dto.TravelArrangementResponse;
 import com.training.logistics.travel.dto.UpdateTravelArrangementRequest;
 import com.training.logistics.travel.model.TravelArrangement;
@@ -25,7 +24,7 @@ public final class TravelArrangementMapper {
                 .arrivalTime(request.getArrivalTime())
                 .seatInfo(trim(request.getSeatInfo()))
                 .cost(request.getCost())
-                .status(TravelArrangementStatus.DRAFT)
+                .travelArrangementStatus(TravelArrangementStatus.BOOKED)
                 .build();
     }
 
@@ -44,9 +43,8 @@ public final class TravelArrangementMapper {
                 arrangement.getArrivalTime(),
                 arrangement.getSeatInfo(),
                 arrangement.getCost(),
-                arrangement.getFinalizedAt(),
-                arrangement.getNotificationSentAt(),
-                arrangement.getStatus()
+                arrangement.getConfirmationSentDatetime(),
+                arrangement.getTravelArrangementStatus()
         );
     }
 
@@ -81,18 +79,6 @@ public final class TravelArrangementMapper {
         if (request.getCost() != null) {
             arrangement.setCost(request.getCost());
         }
-    }
-
-    public static FinalizeTravelArrangementResponse toFinalizeResponse(TravelArrangement arrangement, String message) {
-        return new FinalizeTravelArrangementResponse(
-                arrangement.getTravelArrangementId(),
-                arrangement.getSeminarId(),
-                arrangement.getConsultantId(),
-                arrangement.getStatus(),
-                arrangement.getFinalizedAt(),
-                arrangement.getNotificationSentAt(),
-                message
-        );
     }
 
     private static String trim(String value) {

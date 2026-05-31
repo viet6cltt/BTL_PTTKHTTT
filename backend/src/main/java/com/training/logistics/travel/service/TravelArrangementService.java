@@ -1,16 +1,19 @@
 package com.training.logistics.travel.service;
 
 import com.training.logistics.travel.dto.CreateTravelArrangementRequest;
-import com.training.logistics.travel.dto.FinalizeTravelArrangementResponse;
 import com.training.logistics.travel.dto.TravelArrangementResponse;
+import com.training.logistics.travel.dto.TravelFacilityInfoResponse;
 import com.training.logistics.travel.dto.TravelItineraryResponse;
 import com.training.logistics.travel.dto.UpdateTravelArrangementRequest;
+import com.training.logistics.travel.dto.UpdateTravelArrangementStatusRequest;
 import com.training.logistics.travel.exception.ForbiddenTravelAccessException;
 import com.training.logistics.travel.exception.InvalidTravelArrangementException;
 import com.training.logistics.travel.exception.TravelArrangementNotFoundException;
+import com.training.logistics.travel.external.FacilityContractClient;
 import com.training.logistics.travel.mapper.TravelArrangementMapper;
 import com.training.logistics.travel.model.TravelArrangement;
 import com.training.logistics.travel.model.TravelArrangementStatus;
+import com.training.logistics.travel.repository.ConsultantRepository;
 import com.training.logistics.travel.repository.TravelArrangementRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -23,28 +26,47 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class TravelArrangementService {
     private final TravelArrangementRepository travelArrangementRepository;
+    private final ConsultantRepository consultantRepository;
+    private final FacilityContractClient facilityContractClient;
 
     @Transactional
     public TravelArrangementResponse createTravelArrangement(CreateTravelArrangementRequest request) {
         TravelArrangement arrangement = TravelArrangementMapper.toEntity(request);
         validateArrangementData(arrangement);
-        arrangement.setStatus(TravelArrangementStatus.DRAFT);
-        arrangement.setFinalizedAt(null);
-        arrangement.setNotificationSentAt(null);
         return TravelArrangementMapper.toResponse(travelArrangementRepository.save(arrangement));
     }
 
     @Transactional
     public TravelArrangementResponse updateTravelArrangement(Long travelArrangementId, UpdateTravelArrangementRequest request) {
         TravelArrangement arrangement = findArrangement(travelArrangementId);
-        requireDraft(arrangement, "Only DRAFT travel arrangements can be updated");
+        if (arrangement.getTravelArrangementStatus() == TravelArrangementStatus.CANCELLED) {
+            throw new InvalidTravelArrangementException("Cancelled travel arrangements cannot be updated");
+        }
+
         TravelArrangementMapper.updateEntityFromRequest(request, arrangement);
         validateArrangementData(arrangement);
+        return TravelArrangementMapper.toResponse(arrangement);
+    }
+
+    @Transactional
+    public TravelArrangementResponse updateTravelArrangementStatus(Long travelArrangementId, UpdateTravelArrangementStatusRequest request) {
+        TravelArrangement arrangement = findArrangement(travelArrangementId);
+        ensureCanChangeArrangementStatus(arrangement);
+        TravelArrangementStatus newStatus = request.getStatus();
+        validateStatusTransition(arrangement, newStatus);
+
+        arrangement.setTravelArrangementStatus(newStatus);
+        if (newStatus == TravelArrangementStatus.CONFIRMED) {
+            arrangement.setConfirmationSentDatetime(LocalDateTime.now());
+        }
+
         return TravelArrangementMapper.toResponse(arrangement);
     }
 
@@ -53,38 +75,11 @@ public class TravelArrangementService {
         travelArrangementRepository.delete(findArrangement(travelArrangementId));
     }
 
-    @Transactional
-    public TravelArrangementResponse cancelTravelArrangement(Long travelArrangementId) {
-        TravelArrangement arrangement = findArrangement(travelArrangementId);
-        // TODO: seminar cancellation belongs to the seminar module, e.g. PATCH /api/v1/seminars/{seminarId}/cancel.
-        arrangement.setStatus(TravelArrangementStatus.CANCELLED);
-        arrangement.setFinalizedAt(null);
-        arrangement.setNotificationSentAt(null);
-        return TravelArrangementMapper.toResponse(arrangement);
-    }
-
-    @Transactional
-    public FinalizeTravelArrangementResponse finalizeTravelArrangement(Long travelArrangementId) {
-        TravelArrangement arrangement = findArrangement(travelArrangementId);
-        requireDraft(arrangement, "Only DRAFT travel arrangements can be finalized");
-        validateArrangementData(arrangement);
-
-        LocalDateTime now = LocalDateTime.now();
-        arrangement.setStatus(TravelArrangementStatus.FINALIZED);
-        arrangement.setFinalizedAt(now);
-
-        sendTravelItineraryNotificationPlaceholder(arrangement);
-        arrangement.setNotificationSentAt(LocalDateTime.now());
-
-        return TravelArrangementMapper.toFinalizeResponse(
-                arrangement,
-                "Travel itinerary finalized. Notification placeholder executed."
-        );
-    }
-
     @Transactional(readOnly = true)
     public TravelArrangementResponse getTravelArrangementById(Long travelArrangementId) {
-        return TravelArrangementMapper.toResponse(findArrangement(travelArrangementId));
+        TravelArrangement arrangement = findArrangement(travelArrangementId);
+        ensureCanViewArrangement(arrangement);
+        return TravelArrangementMapper.toResponse(arrangement);
     }
 
     @Transactional(readOnly = true)
@@ -103,38 +98,17 @@ public class TravelArrangementService {
     }
 
     @Transactional(readOnly = true)
-    public List<TravelArrangementResponse> getFinalizedTravelArrangementsForConsultant(Long consultantId) {
-        return toSortedResponses(travelArrangementRepository.findByConsultantIdAndStatus(
-                consultantId,
-                TravelArrangementStatus.FINALIZED
-        ));
-    }
-
-    @Transactional(readOnly = true)
     public TravelItineraryResponse getTravelItinerary(Long seminarId, Long consultantId) {
         List<TravelArrangement> arrangements = travelArrangementRepository.findBySeminarIdAndConsultantId(seminarId, consultantId);
         return buildItineraryResponse(seminarId, consultantId, arrangements);
     }
 
     @Transactional(readOnly = true)
-    public TravelItineraryResponse getMyTravelItineraryForCurrentConsultant() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getPrincipal() == null) {
-            throw new ForbiddenTravelAccessException("Authentication is required");
-        }
-
-        boolean isConsultant = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch("ROLE_CONSULTANT"::equals);
-        if (!isConsultant) {
-            throw new ForbiddenTravelAccessException("Only consultants can view their own travel itinerary here");
-        }
-
-        Long consultantId = parseCurrentUserId(authentication.getPrincipal().toString());
-        List<TravelArrangement> arrangements = travelArrangementRepository.findByConsultantIdAndStatus(
-                consultantId,
-                TravelArrangementStatus.FINALIZED
-        );
+    public TravelItineraryResponse getMyTravelItineraryForCurrentConsultant(TravelArrangementStatus status) {
+        Long consultantId = getCurrentConsultantId();
+        List<TravelArrangement> arrangements = status == null
+                ? travelArrangementRepository.findByConsultantId(consultantId)
+                : travelArrangementRepository.findByConsultantIdAndTravelArrangementStatus(consultantId, status);
         return buildItineraryResponse(null, consultantId, arrangements);
     }
 
@@ -150,37 +124,52 @@ public class TravelArrangementService {
                 .toList();
         BigDecimal totalCost = sortedArrangements.stream()
                 .map(TravelArrangement::getCost)
-                .filter(cost -> cost != null)
+                .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Long responseSeminarId = seminarId;
         if (responseSeminarId == null && !sortedArrangements.isEmpty()) {
-            responseSeminarId = sortedArrangements.get(0).getSeminarId();
+            responseSeminarId = sortedArrangements.getFirst().getSeminarId();
         }
+
+        List<TravelFacilityInfoResponse> facilityReservations = sortedArrangements.stream()
+                .map(TravelArrangement::getSeminarId)
+                .distinct()
+                .map(this::getFacilityInfo)
+                .flatMap(Optional::stream)
+                .toList();
 
         return new TravelItineraryResponse(
                 responseSeminarId,
                 consultantId,
                 responses,
+                facilityReservations,
                 totalCost,
                 calculateOverallStatus(sortedArrangements)
         );
     }
 
+    private Optional<TravelFacilityInfoResponse> getFacilityInfo(Long seminarId) {
+        return facilityContractClient.getReservationSnapshotBySeminarId(seminarId)
+                .map(snapshot -> new TravelFacilityInfoResponse(
+                        snapshot.seminarId(),
+                        snapshot.facilityName(),
+                        snapshot.facilityAddress(),
+                        snapshot.roomNameSpecs()
+                ));
+    }
+
     private TravelArrangementStatus calculateOverallStatus(List<TravelArrangement> arrangements) {
         if (arrangements.isEmpty()) {
-            return TravelArrangementStatus.DRAFT;
+            return TravelArrangementStatus.BOOKED;
         }
-        if (arrangements.stream().allMatch(arrangement -> arrangement.getStatus() == TravelArrangementStatus.CANCELLED)) {
+        if (arrangements.stream().allMatch(arrangement -> arrangement.getTravelArrangementStatus() == TravelArrangementStatus.CANCELLED)) {
             return TravelArrangementStatus.CANCELLED;
         }
-        if (arrangements.stream().anyMatch(arrangement -> arrangement.getStatus() == TravelArrangementStatus.DRAFT)) {
-            return TravelArrangementStatus.DRAFT;
+        if (arrangements.stream().allMatch(arrangement -> arrangement.getTravelArrangementStatus() == TravelArrangementStatus.CONFIRMED)) {
+            return TravelArrangementStatus.CONFIRMED;
         }
-        if (arrangements.stream().allMatch(arrangement -> arrangement.getStatus() == TravelArrangementStatus.FINALIZED)) {
-            return TravelArrangementStatus.FINALIZED;
-        }
-        return TravelArrangementStatus.DRAFT;
+        return TravelArrangementStatus.BOOKED;
     }
 
     private List<TravelArrangementResponse> toSortedResponses(List<TravelArrangement> arrangements) {
@@ -225,25 +214,67 @@ public class TravelArrangementService {
         }
     }
 
-    private void requireDraft(TravelArrangement arrangement, String message) {
-        if (arrangement.getStatus() != TravelArrangementStatus.DRAFT) {
-            throw new InvalidTravelArrangementException(message);
+    private void validateStatusTransition(TravelArrangement arrangement, TravelArrangementStatus newStatus) {
+        if (newStatus == TravelArrangementStatus.BOOKED) {
+            throw new InvalidTravelArrangementException("Status can only be changed to CONFIRMED or CANCELLED");
+        }
+        if (arrangement.getTravelArrangementStatus() == TravelArrangementStatus.CANCELLED) {
+            throw new InvalidTravelArrangementException("Cancelled travel arrangements cannot change status");
         }
     }
 
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
+    private void ensureCanViewArrangement(TravelArrangement arrangement) {
+        if (hasAnyRole("ROLE_ADMIN", "ROLE_LOGISTICS_COORDINATOR")) {
+            return;
+        }
+        if (hasAnyRole("ROLE_CONSULTANT") && Objects.equals(arrangement.getConsultantId(), getCurrentConsultantId())) {
+            return;
+        }
+        throw new ForbiddenTravelAccessException("You cannot access this travel arrangement");
     }
 
-    private Long parseCurrentUserId(String principal) {
+    private void ensureCanChangeArrangementStatus(TravelArrangement arrangement) {
+        if (hasAnyRole("ROLE_LOGISTICS_COORDINATOR")) {
+            return;
+        }
+        if (hasAnyRole("ROLE_CONSULTANT") && Objects.equals(arrangement.getConsultantId(), getCurrentConsultantId())) {
+            return;
+        }
+        throw new ForbiddenTravelAccessException("You cannot change this travel arrangement status");
+    }
+
+    private Long getCurrentConsultantId() {
+        Long userId = getCurrentUserId();
+        return consultantRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ForbiddenTravelAccessException("Current user is not linked to a consultant profile"))
+                .getConsultantId();
+    }
+
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new ForbiddenTravelAccessException("Authentication is required");
+        }
+
         try {
-            return Long.parseLong(principal);
+            return Long.parseLong(authentication.getName());
         } catch (NumberFormatException ex) {
             throw new ForbiddenTravelAccessException("Current user id is invalid");
         }
     }
 
-    private void sendTravelItineraryNotificationPlaceholder(TravelArrangement arrangement) {
-        // TODO: integrate notification module to send Travel Itinerary Information to the consultant.
+    private boolean hasAnyRole(String... roles) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return false;
+        }
+        List<String> roleList = List.of(roles);
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(roleList::contains);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

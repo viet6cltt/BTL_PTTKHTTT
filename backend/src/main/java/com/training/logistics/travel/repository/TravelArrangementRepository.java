@@ -13,9 +13,9 @@ public interface TravelArrangementRepository extends JpaRepository<TravelArrange
 
     List<TravelArrangement> findBySeminarIdAndConsultantId(Long seminarId, Long consultantId);
 
-    List<TravelArrangement> findByStatus(TravelArrangementStatus status);
+    List<TravelArrangement> findByTravelArrangementStatus(TravelArrangementStatus status);
 
-    List<TravelArrangement> findByConsultantIdAndStatus(Long consultantId, TravelArrangementStatus status);
+    List<TravelArrangement> findByConsultantIdAndTravelArrangementStatus(Long consultantId, TravelArrangementStatus status);
 
-    List<TravelArrangement> findBySeminarIdAndStatus(Long seminarId, TravelArrangementStatus status);
+    List<TravelArrangement> findBySeminarIdAndTravelArrangementStatus(Long seminarId, TravelArrangementStatus status);
 }

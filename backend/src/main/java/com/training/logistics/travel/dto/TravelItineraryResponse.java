@@ -13,6 +13,7 @@ public class TravelItineraryResponse {
     private Long seminarId;
     private Long consultantId;
     private List<TravelArrangementResponse> arrangements;
+    private List<TravelFacilityInfoResponse> facilityReservations;
     private BigDecimal totalCost;
     private TravelArrangementStatus overallStatus;
 }

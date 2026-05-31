@@ -1,10 +1,11 @@
 package com.training.logistics.travel.controller;
 
 import com.training.logistics.travel.dto.CreateTravelArrangementRequest;
-import com.training.logistics.travel.dto.FinalizeTravelArrangementResponse;
 import com.training.logistics.travel.dto.TravelArrangementResponse;
 import com.training.logistics.travel.dto.TravelItineraryResponse;
 import com.training.logistics.travel.dto.UpdateTravelArrangementRequest;
+import com.training.logistics.travel.dto.UpdateTravelArrangementStatusRequest;
+import com.training.logistics.travel.model.TravelArrangementStatus;
 import com.training.logistics.travel.service.TravelArrangementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -45,7 +45,7 @@ public class TravelArrangementController {
     }
 
     @GetMapping("/{travelArrangementId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'LOGISTICS_COORDINATOR', 'CONSULTANT')")
     public ResponseEntity<TravelArrangementResponse> getTravelArrangementById(@PathVariable Long travelArrangementId) {
         return ResponseEntity.ok(travelArrangementService.getTravelArrangementById(travelArrangementId));
     }
@@ -70,6 +70,13 @@ public class TravelArrangementController {
         return ResponseEntity.ok(travelArrangementService.getTravelItinerary(seminarId, consultantId));
     }
 
+    @GetMapping("/my-itinerary")
+    @PreAuthorize("hasRole('CONSULTANT')")
+    public ResponseEntity<TravelItineraryResponse> getMyTravelItinerary(
+            @RequestParam(required = false) TravelArrangementStatus status) {
+        return ResponseEntity.ok(travelArrangementService.getMyTravelItineraryForCurrentConsultant(status));
+    }
+
     @PutMapping("/{travelArrangementId}")
     @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<TravelArrangementResponse> updateTravelArrangement(
@@ -78,16 +85,12 @@ public class TravelArrangementController {
         return ResponseEntity.ok(travelArrangementService.updateTravelArrangement(travelArrangementId, request));
     }
 
-    @PatchMapping("/{travelArrangementId}/finalize")
-    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
-    public ResponseEntity<FinalizeTravelArrangementResponse> finalizeTravelArrangement(@PathVariable Long travelArrangementId) {
-        return ResponseEntity.ok(travelArrangementService.finalizeTravelArrangement(travelArrangementId));
-    }
-
-    @PatchMapping("/{travelArrangementId}/cancel")
-    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
-    public ResponseEntity<TravelArrangementResponse> cancelTravelArrangement(@PathVariable Long travelArrangementId) {
-        return ResponseEntity.ok(travelArrangementService.cancelTravelArrangement(travelArrangementId));
+    @PutMapping("/{travelArrangementId}/status")
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'CONSULTANT')")
+    public ResponseEntity<TravelArrangementResponse> updateTravelArrangementStatus(
+            @PathVariable Long travelArrangementId,
+            @Valid @RequestBody UpdateTravelArrangementStatusRequest request) {
+        return ResponseEntity.ok(travelArrangementService.updateTravelArrangementStatus(travelArrangementId, request));
     }
 
     @DeleteMapping("/{travelArrangementId}")

@@ -33,3 +33,14 @@ CREATE TABLE av_equipment_reservations (
     PRIMARY KEY (contract_id, equipment_id),
     CONSTRAINT fk_av_reservations_contract FOREIGN KEY (contract_id) REFERENCES seminar_facility_contracts (contract_id) ON DELETE CASCADE
 );
+
+CREATE TABLE facility_room_reservations (
+    room_reservation_id BIGSERIAL PRIMARY KEY,
+    contract_id BIGINT NOT NULL,
+    room_name_spec VARCHAR(150) NOT NULL,
+    seating_arrangement VARCHAR(100),
+    num_seats INTEGER NOT NULL,
+    room_image_url VARCHAR(500),
+    CONSTRAINT fk_room_reservations_contract FOREIGN KEY (contract_id) REFERENCES seminar_facility_contracts (contract_id) ON DELETE CASCADE,
+    CONSTRAINT chk_room_reservations_num_seats CHECK (num_seats >= 0)
+);

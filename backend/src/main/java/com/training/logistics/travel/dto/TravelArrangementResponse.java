@@ -24,7 +24,6 @@ public class TravelArrangementResponse {
     private LocalDateTime arrivalTime;
     private String seatInfo;
     private BigDecimal cost;
-    private LocalDateTime finalizedAt;
-    private LocalDateTime notificationSentAt;
+    private LocalDateTime confirmationSentDatetime;
     private TravelArrangementStatus status;
 }
