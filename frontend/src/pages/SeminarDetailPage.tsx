@@ -2,11 +2,15 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   CircleDashed,
+  Clock3,
   ClipboardCheck,
+  Eye,
   FileSignature,
   FileText,
+  ListChecks,
   Mail,
   MapPin,
+  MonitorCog,
   PackageCheck,
   Phone,
   Plane,
@@ -49,8 +53,30 @@ const mockSeminarDetail: SeminarDetail = {
   consultantCountry: 'Việt Nam',
 }
 
+type SeminarTypeQuickSummary = {
+  id: number
+  typeName: string
+  description: string
+  durationHours: number
+  arrangementNotes: string
+  materialRequirementCount: number
+  avEquipmentRequirementCount: number
+}
+
+// TODO: Replace mockSeminarTypeQuickSummary with GET /api/master-data/seminar-types/{seminarTypeId}
+const mockSeminarTypeQuickSummary: SeminarTypeQuickSummary = {
+  id: mockSeminarDetail.seminarTypeId,
+  typeName: mockSeminarDetail.seminarTypeName,
+  description: 'Seminar thực hành theo nhóm với chuyên gia kỹ thuật hướng dẫn.',
+  durationHours: 8,
+  arrangementNotes: 'Classroom setup, projector, workbook và ổ cắm điện.',
+  materialRequirementCount: 6,
+  avEquipmentRequirementCount: 5,
+}
+
 export function SeminarDetailPage() {
   const seminar = mockSeminarDetail
+  const seminarTypeSummary = mockSeminarTypeQuickSummary
   const canCreateContract =
     seminar.contractId === null || seminar.contractStatus === 'NOT_CREATED'
   const canOpenContract = seminar.contractStatus !== 'SIGNED'
@@ -66,6 +92,10 @@ export function SeminarDetailPage() {
 
   function handleMaterialRequestAction() {
     // TODO: Navigate to material request route when it is available.
+  }
+
+  function handleSeminarTypeDetailAction() {
+    // TODO: Navigate to seminar type detail route when it is available.
   }
 
   return (
@@ -95,6 +125,10 @@ export function SeminarDetailPage() {
 
               <aside className="space-y-6">
                 <ConsultantInfoCard seminar={seminar} />
+                <SeminarTypeAsideCard
+                  seminarType={seminarTypeSummary}
+                  onViewDetail={handleSeminarTypeDetailAction}
+                />
                 <QuickActionsCard
                   canCreateContract={canCreateContract}
                   canOpenContract={canOpenContract}
@@ -291,6 +325,97 @@ function ConsultantInfoCard({ seminar }: SeminarDetailProps) {
         </div>
       </div>
     </InfoCard>
+  )
+}
+
+type SeminarTypeAsideCardProps = {
+  seminarType: SeminarTypeQuickSummary
+  onViewDetail: () => void
+}
+
+function SeminarTypeAsideCard({
+  seminarType,
+  onViewDetail,
+}: SeminarTypeAsideCardProps) {
+  return (
+    <InfoCard
+      title="Thông tin loại seminar"
+      icon={<ListChecks className="h-6 w-6 text-[#156DB2]" />}
+    >
+      <div className="space-y-5">
+        <div>
+          <p className="text-xs font-extrabold uppercase tracking-wide text-slate-400">
+            Loại seminar
+          </p>
+          <h3 className="mt-2 text-base font-extrabold leading-6 text-[#18395F]">
+            {seminarType.typeName}
+          </h3>
+          <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+            {seminarType.description}
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <SeminarTypeMetric
+            icon={<Clock3 className="h-4 w-4" />}
+            label="Thời lượng"
+            value={`${seminarType.durationHours} giờ`}
+          />
+          <SeminarTypeMetric
+            icon={<PackageCheck className="h-4 w-4" />}
+            label="Yêu cầu vật tư"
+            value={`${seminarType.materialRequirementCount} mục`}
+          />
+          <SeminarTypeMetric
+            icon={<MonitorCog className="h-4 w-4" />}
+            label="Yêu cầu thiết bị"
+            value={`${seminarType.avEquipmentRequirementCount} mục`}
+          />
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-[#F8FBFF] px-4 py-4">
+          <p className="text-xs font-extrabold uppercase tracking-wide text-slate-400">
+            Ghi chú sắp xếp
+          </p>
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+            {seminarType.arrangementNotes}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onViewDetail}
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#5DF8D8] bg-[#E8FFFB] px-4 text-sm font-extrabold text-[#093C5D] transition hover:border-[#26E6CA] hover:bg-[#DFFFF8]"
+        >
+          <Eye className="h-4 w-4" />
+          Xem chi tiết
+        </button>
+      </div>
+    </InfoCard>
+  )
+}
+
+type SeminarTypeMetricProps = {
+  icon: ReactNode
+  label: string
+  value: string
+}
+
+function SeminarTypeMetric({ icon, label, value }: SeminarTypeMetricProps) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-[#F8FBFF] px-4 py-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#E8FFFB] text-[#0B3970]">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-extrabold uppercase tracking-wide text-slate-400">
+          {label}
+        </span>
+        <span className="mt-1 block text-sm font-extrabold text-[#0B3970]">
+          {value}
+        </span>
+      </span>
+    </div>
   )
 }
 

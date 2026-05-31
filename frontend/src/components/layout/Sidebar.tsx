@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  Database,
   UserRound,
   UsersRound,
 } from 'lucide-react'
@@ -14,9 +15,12 @@ const navigation: NavItem[] = [
   {
     label: 'Seminar',
     icon: Calendar,
-    active: true,
-    expanded: true,
     children: ['Danh sách seminar', 'Lịch seminar', 'Tạo seminar mới'],
+  },
+  {
+    label: 'Master data',
+    icon: Database,
+    children: ['Loại seminar', 'Vật tư', 'Thiết bị nghe nhìn'],
   },
   { label: 'Booking', icon: ClipboardList, expanded: false },
   { label: 'Chuyên gia', icon: UserRound },
@@ -25,10 +29,14 @@ const navigation: NavItem[] = [
 ]
 
 type SidebarProps = {
+  activeSection?: string
   activeChild?: string
 }
 
-export function Sidebar({ activeChild = 'Danh sách seminar' }: SidebarProps) {
+export function Sidebar({
+  activeSection = 'Seminar',
+  activeChild = 'Danh sách seminar',
+}: SidebarProps) {
   return (
     <aside className="bg-[#093C5D] text-white shadow-2xl lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-[270px]">
       <div className="flex h-22 items-center gap-4 border-b border-white/15 px-7">
@@ -46,13 +54,17 @@ export function Sidebar({ activeChild = 'Danh sách seminar' }: SidebarProps) {
       <nav className="space-y-4 px-4 py-14">
         {navigation.map((item) => {
           const Icon = item.icon
-          const Chevron = item.expanded ? ChevronUp : ChevronDown
+          const isActive =
+            item.label === activeSection || item.children?.includes(activeChild)
+          const isExpanded =
+            item.expanded ?? Boolean(item.children && (isActive || item.active))
+          const Chevron = isExpanded ? ChevronUp : ChevronDown
 
           return (
             <div key={item.label}>
               <div
                 className={`flex items-center gap-4 rounded-xl px-4 py-4 text-[15px] transition ${
-                  item.active
+                  isActive || item.active
                     ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
                     : 'text-white/90 hover:bg-white/10'
                 }`}
@@ -64,7 +76,7 @@ export function Sidebar({ activeChild = 'Danh sách seminar' }: SidebarProps) {
                 )}
               </div>
 
-              {item.children && (
+              {item.children && isExpanded && (
                 <div className="mt-3 space-y-2 pl-8">
                   {item.children.map((child) => (
                     <div
