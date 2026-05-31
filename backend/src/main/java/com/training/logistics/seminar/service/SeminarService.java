@@ -65,6 +65,7 @@ public class SeminarService {
     public SeminarResponse create(SeminarCreateRequest request) {
         LocalDate startDate = SeminarValidation.requireDate(request.startDate(), "startDate");
         LocalDate endDate = SeminarValidation.requireDate(request.endDate(), "endDate");
+        SeminarValidation.requireFutureStartDate(startDate);
         SeminarValidation.requireEndDateOnOrAfterStartDate(startDate, endDate);
         ensureConsultantAvailable(request.consultantId(), startDate, endDate);
 
@@ -111,10 +112,14 @@ public class SeminarService {
 
     public SeminarResponse assignCoordinator(Long id, AssignCoordinatorRequest request) {
         Seminar seminar = findEntity(id);
-        User coordinator = requireUser(request.logisticsCoordinatorId(), "Logistics coordinator");
-        if (coordinator.getRole() != UserRole.LOGISTICS_COORDINATOR) {
-            throw new BadRequestException("User is not a LOGISTICS_COORDINATOR");
+        User currentUser = requireCurrentUser();
+        if (currentUser.getRole() != UserRole.LOGISTICS_COORDINATOR) {
+            throw new BadRequestException("Only a LOGISTICS_COORDINATOR can claim a seminar");
         }
+        if (!currentUser.getUserId().equals(request.logisticsCoordinatorId())) {
+            throw new BadRequestException("Coordinators can only claim seminars for themselves");
+        }
+        User coordinator = requireUser(request.logisticsCoordinatorId(), "Logistics coordinator");
         seminar.setCoordinator(coordinator);
         return toResponse(seminar);
     }

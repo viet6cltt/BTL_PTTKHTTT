@@ -180,6 +180,80 @@ export interface AudioVisualEquipmentResponse {
   unit: string
 }
 
+export interface MaterialResponse {
+  id: number
+  materialName: string
+  materialType: string
+  description: string | null
+  unit: string
+}
+
+export interface SeminarTypeResponse {
+  id: number
+  typeName: string
+  description: string | null
+  durationHours: number
+  arrangementNotes: string | null
+}
+
+export interface MaterialRequirementResponse {
+  seminarTypeId: number
+  materialId: number
+  materialName: string
+  materialType: string
+  unit: string
+  defaultQuantity: number
+  dependOnNumParticipant: boolean
+  participantPerQuantity: number | null
+  notes: string | null
+}
+
+export interface AvEquipmentRequirementResponse {
+  seminarTypeId: number
+  equipmentId: number
+  equipmentName: string
+  equipmentType: string
+  unit: string
+  quantityRequired: number
+  dependOnNumParticipant: boolean
+  participantPerQuantity: number | null
+}
+
+export interface SeminarTypeRequest {
+  typeName: string
+  description: string | null
+  durationHours: number
+  arrangementNotes: string | null
+}
+
+export interface MaterialRequest {
+  materialName: string
+  materialType: string
+  description: string | null
+  unit: string
+}
+
+export interface AudioVisualEquipmentRequest {
+  equipmentName: string
+  equipmentType: string
+  unit: string
+}
+
+export interface MaterialRequirementRequest {
+  materialId: number
+  defaultQuantity: number
+  dependOnNumParticipant: boolean
+  participantPerQuantity: number | null
+  notes: string | null
+}
+
+export interface AvEquipmentRequirementRequest {
+  equipmentId: number
+  quantityRequired: number
+  dependOnNumParticipant: boolean
+  participantPerQuantity: number | null
+}
+
 function getHeaders() {
   const token = localStorage.getItem('token')
   const headers: HeadersInit = {
@@ -196,7 +270,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
     let errorMsg = 'An error occurred'
     try {
       const data = await response.json()
-      errorMsg = data.message || errorMsg
+      errorMsg = data.message || data.detail || data.title || errorMsg
     } catch {
       // Ignore
     }
@@ -552,11 +626,44 @@ export const api = {
     return handleResponse<MaterialRequestResponse>(res)
   },
 
-  async getSeminarTypes(): Promise<any[]> {
+  async getSeminarTypes(): Promise<SeminarTypeResponse[]> {
     const res = await fetch(`${API_BASE_URL}/master-data/seminar-types`, {
       headers: getHeaders(),
     })
-    return handleResponse<any[]>(res)
+    return handleResponse<SeminarTypeResponse[]>(res)
+  },
+
+  async getSeminarTypeById(id: number): Promise<SeminarTypeResponse> {
+    const res = await fetch(`${API_BASE_URL}/master-data/seminar-types/${id}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<SeminarTypeResponse>(res)
+  },
+
+  async createSeminarType(data: SeminarTypeRequest): Promise<SeminarTypeResponse> {
+    const res = await fetch(`${API_BASE_URL}/master-data/seminar-types`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<SeminarTypeResponse>(res)
+  },
+
+  async updateSeminarType(id: number, data: SeminarTypeRequest): Promise<SeminarTypeResponse> {
+    const res = await fetch(`${API_BASE_URL}/master-data/seminar-types/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<SeminarTypeResponse>(res)
+  },
+
+  async deleteSeminarType(id: number): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/master-data/seminar-types/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    return handleResponse<void>(res)
   },
 
   async getConsultants(): Promise<PageResponse<any>> {
@@ -566,10 +673,172 @@ export const api = {
     return handleResponse<PageResponse<any>>(res)
   },
 
+  async getMaterials(): Promise<MaterialResponse[]> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/materials`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<MaterialResponse[]>(res)
+  },
+
+  async createMaterial(data: MaterialRequest): Promise<MaterialResponse> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/materials`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<MaterialResponse>(res)
+  },
+
+  async updateMaterial(id: number, data: MaterialRequest): Promise<MaterialResponse> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/materials/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<MaterialResponse>(res)
+  },
+
+  async deleteMaterial(id: number): Promise<void> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/materials/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    return handleResponse<void>(res)
+  },
+
   async getAudioVisualEquipments(): Promise<AudioVisualEquipmentResponse[]> {
     const res = await fetch(`${API_ROOT_URL}/api/master-data/audio-visual-equipments`, {
       headers: getHeaders(),
     })
     return handleResponse<AudioVisualEquipmentResponse[]>(res)
+  },
+
+  async createAudioVisualEquipment(data: AudioVisualEquipmentRequest): Promise<AudioVisualEquipmentResponse> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/audio-visual-equipments`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<AudioVisualEquipmentResponse>(res)
+  },
+
+  async updateAudioVisualEquipment(
+    id: number,
+    data: AudioVisualEquipmentRequest,
+  ): Promise<AudioVisualEquipmentResponse> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/audio-visual-equipments/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<AudioVisualEquipmentResponse>(res)
+  },
+
+  async deleteAudioVisualEquipment(id: number): Promise<void> {
+    const res = await fetch(`${API_ROOT_URL}/api/master-data/audio-visual-equipments/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    })
+    return handleResponse<void>(res)
+  },
+
+  async getMaterialRequirements(seminarTypeId: number): Promise<MaterialRequirementResponse[]> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/material-requirements`,
+      { headers: getHeaders() },
+    )
+    return handleResponse<MaterialRequirementResponse[]>(res)
+  },
+
+  async createMaterialRequirement(
+    seminarTypeId: number,
+    data: MaterialRequirementRequest,
+  ): Promise<MaterialRequirementResponse> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/material-requirements`,
+      {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      },
+    )
+    return handleResponse<MaterialRequirementResponse>(res)
+  },
+
+  async updateMaterialRequirement(
+    seminarTypeId: number,
+    materialId: number,
+    data: MaterialRequirementRequest,
+  ): Promise<MaterialRequirementResponse> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/material-requirements/${materialId}`,
+      {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      },
+    )
+    return handleResponse<MaterialRequirementResponse>(res)
+  },
+
+  async deleteMaterialRequirement(seminarTypeId: number, materialId: number): Promise<void> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/material-requirements/${materialId}`,
+      {
+        method: 'DELETE',
+        headers: getHeaders(),
+      },
+    )
+    return handleResponse<void>(res)
+  },
+
+  async getAvEquipmentRequirements(seminarTypeId: number): Promise<AvEquipmentRequirementResponse[]> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/av-equipment-requirements`,
+      { headers: getHeaders() },
+    )
+    return handleResponse<AvEquipmentRequirementResponse[]>(res)
+  },
+
+  async createAvEquipmentRequirement(
+    seminarTypeId: number,
+    data: AvEquipmentRequirementRequest,
+  ): Promise<AvEquipmentRequirementResponse> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/av-equipment-requirements`,
+      {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      },
+    )
+    return handleResponse<AvEquipmentRequirementResponse>(res)
+  },
+
+  async updateAvEquipmentRequirement(
+    seminarTypeId: number,
+    equipmentId: number,
+    data: AvEquipmentRequirementRequest,
+  ): Promise<AvEquipmentRequirementResponse> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/av-equipment-requirements/${equipmentId}`,
+      {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      },
+    )
+    return handleResponse<AvEquipmentRequirementResponse>(res)
+  },
+
+  async deleteAvEquipmentRequirement(seminarTypeId: number, equipmentId: number): Promise<void> {
+    const res = await fetch(
+      `${API_ROOT_URL}/api/master-data/seminar-types/${seminarTypeId}/av-equipment-requirements/${equipmentId}`,
+      {
+        method: 'DELETE',
+        headers: getHeaders(),
+      },
+    )
+    return handleResponse<void>(res)
   },
 }

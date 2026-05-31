@@ -20,11 +20,9 @@ export function Sidebar({ currentTab, onChangeTab }: SidebarProps) {
 
   if (!user) return null
 
-  const isBooking = user.role === 'BOOKING_STAFF' || user.role === 'ADMIN'
-  const isCoordinator = user.role === 'LOGISTICS_COORDINATOR' || user.role === 'ADMIN'
+  const isBooking = user.role === 'BOOKING_STAFF'
   const isConsultant = user.role === 'CONSULTANT'
-  const isMaterials = user.role === 'MATERIALS_STAFF' || user.role === 'ADMIN'
-  const canManageMasterData = user.role === 'ADMIN'
+  const canViewMaterialRequests = user.role === 'MATERIALS_STAFF'
 
   return (
     <aside className="flex flex-col justify-between bg-[#093C5D] text-white shadow-2xl lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-[270px]">
@@ -75,25 +73,23 @@ export function Sidebar({ currentTab, onChangeTab }: SidebarProps) {
             )}
           </div>
 
-          {canManageMasterData && (
-            <div className="space-y-1 border-t border-white/10 pt-4">
-              <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
-                Quản trị hệ thống
-              </p>
-              <button
-                type="button"
-                onClick={() => onChangeTab('MASTER_DATA')}
-                className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
-                  currentTab === 'MASTER_DATA'
-                    ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
-                    : 'font-semibold text-white/90 hover:bg-white/10'
-                }`}
-              >
-                <Database className="h-5.5 w-5.5 shrink-0" />
-                <span>Master data</span>
-              </button>
-            </div>
-          )}
+          <div className="space-y-1 border-t border-white/10 pt-4">
+            <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
+              Dữ liệu hệ thống
+            </p>
+            <button
+              type="button"
+              onClick={() => onChangeTab('MASTER_DATA')}
+              className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
+                currentTab === 'MASTER_DATA' || currentTab === 'SEMINAR_TYPE_DETAIL'
+                  ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
+                  : 'font-semibold text-white/90 hover:bg-white/10'
+              }`}
+            >
+              <Database className="h-5.5 w-5.5 shrink-0" />
+              <span>Master data</span>
+            </button>
+          </div>
 
           {isConsultant && (
             <div className="space-y-1 border-t border-white/10 pt-4">
@@ -115,7 +111,7 @@ export function Sidebar({ currentTab, onChangeTab }: SidebarProps) {
             </div>
           )}
 
-          {(isMaterials || isCoordinator) && (
+          {canViewMaterialRequests && (
             <div className="space-y-1 border-t border-white/10 pt-4">
               <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
                 Hậu cần & Vật tư

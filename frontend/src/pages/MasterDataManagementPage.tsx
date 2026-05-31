@@ -1,19 +1,26 @@
 import { ListChecks, MonitorCog, Package } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { AvEquipmentMasterDataPage } from './AvEquipmentMasterDataPage'
 import { MaterialMasterDataPage } from './MaterialMasterDataPage'
 import { SeminarTypeMasterDataPage } from './SeminarTypeMasterDataPage'
 
 type MasterDataTab = 'seminarTypes' | 'materials' | 'avEquipments'
 
-export function MasterDataManagementPage() {
+type MasterDataManagementPageProps = {
+  onSelectSeminarType: (id: number) => void
+}
+
+export function MasterDataManagementPage({ onSelectSeminarType }: MasterDataManagementPageProps) {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<MasterDataTab>('seminarTypes')
+  const canModifyMasterData = user?.role === 'ADMIN'
 
   if (activeTab === 'avEquipments') {
     return (
       <div>
         <MasterDataTabs activeTab={activeTab} onChange={setActiveTab} />
-        <AvEquipmentMasterDataPage />
+        <AvEquipmentMasterDataPage canModifyMasterData={canModifyMasterData} />
       </div>
     )
   }
@@ -22,7 +29,7 @@ export function MasterDataManagementPage() {
     return (
       <div>
         <MasterDataTabs activeTab={activeTab} onChange={setActiveTab} />
-        <MaterialMasterDataPage />
+        <MaterialMasterDataPage canModifyMasterData={canModifyMasterData} />
       </div>
     )
   }
@@ -30,7 +37,10 @@ export function MasterDataManagementPage() {
   return (
     <div>
       <MasterDataTabs activeTab={activeTab} onChange={setActiveTab} />
-      <SeminarTypeMasterDataPage />
+      <SeminarTypeMasterDataPage
+        canModifyMasterData={canModifyMasterData}
+        onSelectSeminarType={onSelectSeminarType}
+      />
     </div>
   )
 }

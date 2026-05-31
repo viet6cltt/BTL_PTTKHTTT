@@ -47,7 +47,15 @@ export function AllMaterialsPage() {
     )
   }
 
-  const isMaterialsStaff = user?.role === 'MATERIALS_STAFF' || user?.role === 'ADMIN'
+  const isMaterialsStaff = user?.role === 'MATERIALS_STAFF'
+
+  if (!isMaterialsStaff) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm font-bold text-red-600">
+        Bạn không có quyền truy cập trang này. Chức năng này chỉ dành cho bộ phận vật tư (MATERIALS_STAFF).
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-7 text-left">

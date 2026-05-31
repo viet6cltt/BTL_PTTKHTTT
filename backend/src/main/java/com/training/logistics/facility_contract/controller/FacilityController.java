@@ -53,13 +53,13 @@ public class FacilityController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<FacilityResponse> createFacility(@Valid @RequestBody FacilityCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(facilityService.createFacility(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<FacilityResponse> updateFacility(
             @PathVariable Long id,
             @Valid @RequestBody FacilityCreateRequest request) {

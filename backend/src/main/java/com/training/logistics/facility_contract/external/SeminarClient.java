@@ -14,6 +14,8 @@ public interface SeminarClient {
 
     void markFacilitySecured(Long seminarId);
 
+    void verifyCoordinator(Long seminarId);
+
     record SeminarScheduleSnapshot(LocalDate startDate, LocalDate endDate, String expectedTimeSlot) {
     }
 }

@@ -165,7 +165,7 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
     setPage(Math.min(Math.max(nextPage, 1), totalPages))
   }
 
-  const isBookingStaff = user?.role === 'BOOKING_STAFF' || user?.role === 'ADMIN'
+  const isBookingStaff = user?.role === 'BOOKING_STAFF'
 
   return (
     <div className="space-y-7">

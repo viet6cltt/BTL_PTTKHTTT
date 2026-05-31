@@ -40,4 +40,27 @@ public class SeminarClientImpl implements SeminarClient {
     public void markFacilitySecured(Long seminarId) {
         seminarService.markFacilitySecured(seminarId);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void verifyCoordinator(Long seminarId) {
+        Seminar seminar = seminarService.findEntity(seminarId);
+        com.training.logistics.auth.model.User coordinator = seminar.getCoordinator();
+        if (coordinator == null) {
+            throw new com.training.logistics.common.exception.BadRequestException("This seminar has not been claimed by a coordinator yet");
+        }
+        org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new com.training.logistics.common.exception.BadRequestException("Authentication is required");
+        }
+        Long currentUserId;
+        try {
+            currentUserId = Long.parseLong(authentication.getName());
+        } catch (NumberFormatException ex) {
+            throw new com.training.logistics.common.exception.BadRequestException("Current user id is invalid");
+        }
+        if (!coordinator.getUserId().equals(currentUserId)) {
+            throw new com.training.logistics.common.exception.BadRequestException("Only the coordinator assigned to this seminar can perform this action");
+        }
+    }
 }

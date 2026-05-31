@@ -1,18 +1,20 @@
 import {
   CalendarPlus,
   CheckCircle2,
+  Clock3,
   FileText,
   Lightbulb,
   Mail,
   MapPin,
   Phone,
+  ShieldCheck,
   User,
   UserRound,
+  UsersRound,
   XCircle,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
-import { InfoCard } from '../components/info/InfoCard'
 import { api } from '../api'
 
 interface CreateSeminarPageProps {
@@ -126,7 +128,7 @@ export function CreateSeminarPage({ onSaveSuccess, onCancel }: CreateSeminarPage
             {/* Seminar Type Select */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="seminarTypeId" className="text-xs font-black uppercase tracking-wider text-slate-500">
-                Loại seminar học phần *
+                Loại seminar *
               </label>
               <select
                 id="seminarTypeId"
@@ -164,7 +166,7 @@ export function CreateSeminarPage({ onSaveSuccess, onCancel }: CreateSeminarPage
             {/* Start Date */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="startDate" className="text-xs font-black uppercase tracking-wider text-slate-500">
-                Ngày khai giảng *
+                Ngày bắt đầu *
               </label>
               <input
                 id="startDate"
@@ -179,7 +181,7 @@ export function CreateSeminarPage({ onSaveSuccess, onCancel }: CreateSeminarPage
             {/* End Date */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="endDate" className="text-xs font-black uppercase tracking-wider text-slate-500">
-                Ngày bế mạc *
+                Ngày kết thúc *
               </label>
               <input
                 id="endDate"
@@ -279,7 +281,7 @@ export function CreateSeminarPage({ onSaveSuccess, onCancel }: CreateSeminarPage
         </form>
 
         {/* Right column: auxiliary preview panels */}
-        <aside className="space-y-6">
+        <aside className="space-y-5 xl:pt-0">
           <SeminarTypeCard info={selectedTypeInfo} />
           <ConsultantCard info={selectedConsultantInfo} />
           <NoticeCard />
@@ -291,92 +293,162 @@ export function CreateSeminarPage({ onSaveSuccess, onCancel }: CreateSeminarPage
 
 function SeminarTypeCard({ info }: { info?: any }) {
   return (
-    <InfoCard
+    <AsideCard
       title="Học phần giảng dạy"
-      icon={<Lightbulb className="h-6 w-6 text-[#156DB2]" />}
+      icon={<Lightbulb className="h-5 w-5" />}
       highlighted
     >
       {info ? (
         <div className="space-y-5 text-left">
           <div>
-            <h3 className="text-base font-extrabold text-[#18395F]">{info.typeName}</h3>
-            <p className="mt-2 text-xs leading-6 text-slate-500">{info.description}</p>
+            <h3 className="text-base font-extrabold text-[#092F5A]">{info.typeName}</h3>
+            <p className="mt-2 text-xs font-medium leading-6 text-slate-500">
+              {info.description || 'Chưa có mô tả học phần.'}
+            </p>
           </div>
-          <div className="grid gap-3 text-xs text-slate-600">
-            <div>
-              <p className="font-extrabold text-[#18395F]">Thời lượng chương trình</p>
-              <p className="mt-0.5">{info.durationHours} giờ thực hành</p>
-            </div>
-            <div>
-              <p className="font-extrabold text-[#18395F]">Bố trí chỗ ngồi tham khảo</p>
-              <p className="mt-0.5 leading-5">{info.arrangementNotes || 'Theo chuẩn phòng LAB'}</p>
-            </div>
+          <div className="grid gap-4 text-xs text-slate-600">
+            <DetailRow
+              icon={<Clock3 className="h-5 w-5" />}
+              title="Thời lượng chương trình"
+              description={`${info.durationHours} giờ thực hành`}
+            />
+            <DetailRow
+              icon={<UsersRound className="h-5 w-5" />}
+              title="Bố trí chỗ ngồi tham khảo"
+              description={info.arrangementNotes || 'Theo chuẩn phòng LAB'}
+            />
           </div>
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-xs font-semibold text-slate-400">
-          Chọn loại học phần để xem mô tả
-        </p>
+        <EmptyAsideState message="Chọn loại học phần để xem mô tả" />
       )}
-    </InfoCard>
+    </AsideCard>
   )
 }
 
 function ConsultantCard({ info }: { info?: any }) {
   return (
-    <InfoCard
+    <AsideCard
       title="Thông tin chuyên gia"
-      icon={<UserRound className="h-6 w-6 text-[#156DB2]" />}
+      icon={<UserRound className="h-5 w-5" />}
     >
       {info ? (
         <div className="flex gap-4 text-left">
-          <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#B9FFF1] text-[#257AB7]">
+          <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#CFFFF7] text-[#257AB7] shadow-inner">
             <User className="h-10 w-10 fill-[#257AB7]/20 stroke-[#257AB7]" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-extrabold text-[#18395F] truncate">{info.fullName}</h3>
-            <span className="mt-2 inline-flex rounded-full bg-[#B9FFF1] px-3 py-1 text-[10px] font-extrabold text-[#009C8E]">
+            <h3 className="truncate text-sm font-extrabold text-[#092F5A]">{info.fullName}</h3>
+            <span className="mt-2 inline-flex rounded-full bg-[#DFFFF9] px-3 py-1 text-[10px] font-extrabold text-[#009C8E]">
               {info.specialty || 'Chuyên gia Đào tạo'}
             </span>
-            <div className="mt-4 space-y-2.5 text-xs text-slate-500">
-              <p className="flex items-center gap-2">
-                <Phone className="h-3.5 w-3.5" />
+            <div className="mt-4 space-y-2.5 text-xs font-medium text-slate-500">
+              <p className="flex items-center gap-2.5">
+                <Phone className="h-3.5 w-3.5 text-[#156DB2]" />
                 {info.phone}
               </p>
-              <p className="flex items-center gap-2">
-                <Mail className="h-3.5 w-3.5" />
+              <p className="flex items-center gap-2.5">
+                <Mail className="h-3.5 w-3.5 text-[#156DB2]" />
                 <span className="truncate">{info.email}</span>
               </p>
-              <p className="flex items-center gap-2">
-                <MapPin className="h-3.5 w-3.5" />
+              <p className="flex items-center gap-2.5">
+                <MapPin className="h-3.5 w-3.5 text-[#156DB2]" />
                 {info.city}, {info.country}
               </p>
             </div>
           </div>
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center text-xs font-semibold text-slate-400">
-          Chọn chuyên gia đào tạo để xem lý lịch
-        </p>
+        <EmptyAsideState message="Chọn chuyên gia đào tạo để xem lý lịch" />
       )}
-    </InfoCard>
+    </AsideCard>
   )
 }
 
 function NoticeCard() {
   return (
-    <InfoCard
+    <AsideCard
       title="Lưu ý quan trọng"
       icon={
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-[#1679B7] text-xs font-bold text-white">
+        <span className="grid h-5 w-5 place-items-center rounded-full bg-[#1679B7] text-[11px] font-bold text-white">
           i
         </span>
       }
       highlighted
     >
-      <p className="max-w-[28ch] text-xs leading-6 text-slate-500 text-left">
-        Chuyên gia không thể nhận hai lịch giảng dạy chồng chéo ngày tổ chức. Hệ thống sẽ tự động xác thực tính khả dụng trước khi xác nhận.
-      </p>
-    </InfoCard>
+      <div className="flex gap-3 text-left">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#E2FFFA] text-[#00A995]">
+          <ShieldCheck className="h-5 w-5" />
+        </div>
+        <p className="text-xs font-medium leading-6 text-slate-500">
+          Chuyên gia không thể nhận hai lịch giảng dạy chồng chéo ngày tổ chức. Hệ thống sẽ tự động xác thực tính khả dụng trước khi xác nhận.
+        </p>
+      </div>
+    </AsideCard>
+  )
+}
+
+function AsideCard({
+  title,
+  icon,
+  highlighted = false,
+  children,
+}: {
+  title: string
+  icon: React.ReactNode
+  highlighted?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <section
+      className={`overflow-hidden rounded-2xl border bg-white shadow-xl shadow-slate-200/70 ${
+        highlighted ? 'border-[#A7F3E9]' : 'border-slate-200'
+      }`}
+    >
+      <div
+        className={`flex items-center gap-3 border-b px-6 py-4 ${
+          highlighted
+            ? 'border-[#A7F3E9] bg-[#E8FFFB]'
+            : 'border-slate-100 bg-white'
+        }`}
+      >
+        <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#EFFDFF] text-[#156DB2] shadow-sm shadow-sky-100">
+          {icon}
+        </div>
+        <h2 className="text-base font-extrabold text-[#092F5A]">{title}</h2>
+      </div>
+      <div className="px-6 py-5">{children}</div>
+    </section>
+  )
+}
+
+function DetailRow({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode
+  title: string
+  description: string
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#E8FFFB] text-[#156DB2]">
+        {icon}
+      </div>
+      <div>
+        <p className="font-extrabold text-[#092F5A]">{title}</p>
+        <p className="mt-1 leading-5 text-slate-500">{description}</p>
+      </div>
+    </div>
+  )
+}
+
+function EmptyAsideState({ message }: { message: string }) {
+  return (
+    <div className="grid place-items-center rounded-xl border border-dashed border-slate-300 bg-[#F8FBFF] px-5 py-6 text-center">
+      <UserRound className="mb-2 h-6 w-6 text-slate-400" />
+      <p className="text-xs font-semibold text-slate-400">{message}</p>
+    </div>
   )
 }

@@ -9,6 +9,7 @@ type MasterDataSearchHeaderProps = {
   searchPlaceholder: string
   searchTerm: string
   createLabel: string
+  showCreate?: boolean
   onSearchChange: (value: string) => void
   onCreate: () => void
 }
@@ -22,6 +23,7 @@ export function MasterDataSearchHeader({
   searchPlaceholder,
   searchTerm,
   createLabel,
+  showCreate = true,
   onSearchChange,
   onCreate,
 }: MasterDataSearchHeaderProps) {
@@ -45,16 +47,17 @@ export function MasterDataSearchHeader({
             className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-[#18395F] outline-none transition placeholder:text-slate-400 focus:border-[#5DF8D8] focus:ring-4 focus:ring-[#5DF8D8]/20 sm:w-72"
           />
         </label>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5DF8D8] px-4 text-sm font-extrabold text-[#093C5D] shadow-md shadow-teal-200/60 transition hover:bg-[#4eeac9]"
-        >
-          <Plus className="h-4 w-4" />
-          {createLabel}
-        </button>
+        {showCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#5DF8D8] px-4 text-sm font-extrabold text-[#093C5D] shadow-md shadow-teal-200/60 transition hover:bg-[#4eeac9]"
+          >
+            <Plus className="h-4 w-4" />
+            {createLabel}
+          </button>
+        )}
       </div>
     </div>
   )
 }
-

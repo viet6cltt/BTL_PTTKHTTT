@@ -41,19 +41,19 @@ public class MaterialRequestController {
     }
 
     @GetMapping("/material-requests")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'MATERIALS_STAFF')")
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'MATERIALS_STAFF', 'ADMIN')")
     public List<MaterialRequestResponse> getAll() {
         return materialRequestService.getAll();
     }
 
     @GetMapping("/material-requests/{id}")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'MATERIALS_STAFF')")
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'MATERIALS_STAFF', 'ADMIN')")
     public MaterialRequestResponse getById(@PathVariable Long id) {
         return materialRequestService.getById(id);
     }
 
     @GetMapping("/seminars/{seminarId}/material-requests")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'MATERIALS_STAFF')")
+    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'MATERIALS_STAFF', 'ADMIN')")
     public List<MaterialRequestResponse> getBySeminar(@PathVariable Long seminarId) {
         return materialRequestService.getBySeminar(seminarId);
     }

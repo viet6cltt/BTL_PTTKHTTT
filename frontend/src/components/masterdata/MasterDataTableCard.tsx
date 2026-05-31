@@ -11,6 +11,7 @@ type MasterDataTableCardProps = {
   searchPlaceholder: string
   searchTerm: string
   createLabel: string
+  showCreate?: boolean
   minTableWidthClass: string
   currentPage: number
   totalPages: number
@@ -29,6 +30,7 @@ export function MasterDataTableCard({
   searchPlaceholder,
   searchTerm,
   createLabel,
+  showCreate = true,
   minTableWidthClass,
   currentPage,
   totalPages,
@@ -48,6 +50,7 @@ export function MasterDataTableCard({
         searchPlaceholder={searchPlaceholder}
         searchTerm={searchTerm}
         createLabel={createLabel}
+        showCreate={showCreate}
         onSearchChange={onSearchChange}
         onCreate={onCreate}
       />
@@ -68,4 +71,3 @@ export function MasterDataTableCard({
     </section>
   )
 }
-

@@ -9,6 +9,7 @@ import com.training.logistics.facility_contract.dto.SeminarReservationResponse;
 import com.training.logistics.facility_contract.dto.UpdateRoomReservationRequest;
 import com.training.logistics.facility_contract.exception.InvalidFacilityContractRequestException;
 import com.training.logistics.facility_contract.external.MasterDataClient;
+import com.training.logistics.facility_contract.external.SeminarClient;
 import com.training.logistics.facility_contract.mapper.FacilityContractMapper;
 import com.training.logistics.facility_contract.model.AvEquipmentReservation;
 import com.training.logistics.facility_contract.model.ContractStatus;
@@ -33,10 +34,12 @@ public class ReservationService {
     private final FacilityContractService contractService;
     private final MasterDataClient masterDataClient;
     private final MinioStorageService minioStorageService;
+    private final SeminarClient seminarClient;
 
     @Transactional
     public List<AvEquipmentReservationResponse> saveAvEquipmentReservations(SaveAvEquipmentReservationsRequest request) {
         SeminarFacilityContract contract = getEditableContract(request.getContractId(), "Only PENDING_NEGOTIATE contracts can store AV reservations");
+        seminarClient.verifyCoordinator(contract.getSeminarId());
 
         for (AvEquipmentReservationItemRequest item : request.getEquipments()) {
             if (!masterDataClient.existsEquipmentById(item.getEquipmentId())) {
@@ -63,6 +66,7 @@ public class ReservationService {
     @Transactional
     public RoomReservationResponse createRoomReservation(CreateRoomReservationRequest request) {
         SeminarFacilityContract contract = getEditableContract(request.getContractId(), "Only PENDING_NEGOTIATE contracts can store room reservations");
+        seminarClient.verifyCoordinator(contract.getSeminarId());
 
         FacilityRoomReservation reservation = FacilityRoomReservation.builder()
                 .contract(contract)
@@ -82,6 +86,7 @@ public class ReservationService {
                 reservation.getContract().getContractId(),
                 "Approved contracts cannot be changed"
         );
+        seminarClient.verifyCoordinator(contract.getSeminarId());
 
         reservation.setRoomNameSpec(request.getRoomNameSpec().trim());
         reservation.setSeatingArrangement(normalizeBlank(request.getSeatingArrangement()));
@@ -98,7 +103,8 @@ public class ReservationService {
     @Transactional
     public void deleteRoomReservation(Long roomReservationId) {
         FacilityRoomReservation reservation = findRoomReservation(roomReservationId);
-        getEditableContract(reservation.getContract().getContractId(), "Approved contracts cannot be changed");
+        SeminarFacilityContract contract = getEditableContract(reservation.getContract().getContractId(), "Approved contracts cannot be changed");
+        seminarClient.verifyCoordinator(contract.getSeminarId());
         deleteExistingRoomImage(reservation.getRoomImageUrl());
         roomReservationRepository.delete(reservation);
     }

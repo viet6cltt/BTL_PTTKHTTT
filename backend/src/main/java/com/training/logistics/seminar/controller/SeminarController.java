@@ -32,7 +32,7 @@ public class SeminarController {
     private final SeminarService seminarService;
 
     @PostMapping
-    @PreAuthorize("hasRole('BOOKING_STAFF')")
+    @PreAuthorize("hasAnyRole('BOOKING_STAFF', 'ADMIN')")
     public ResponseEntity<SeminarResponse> create(@Valid @RequestBody SeminarCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(seminarService.create(request));
     }
@@ -66,7 +66,7 @@ public class SeminarController {
     }
 
     @PutMapping("/{id}/assign-coordinator")
-    @PreAuthorize("hasAnyRole('BOOKING_STAFF', 'LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<SeminarResponse> assignCoordinator(
             @PathVariable Long id,
             @Valid @RequestBody AssignCoordinatorRequest request) {

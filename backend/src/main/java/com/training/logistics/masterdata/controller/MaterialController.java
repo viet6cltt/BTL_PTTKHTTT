@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,6 +38,7 @@ public class MaterialController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MaterialResponse> create(@Valid @RequestBody MaterialRequest request) {
         MaterialResponse response = materialService.create(request);
         return ResponseEntity
@@ -45,11 +47,13 @@ public class MaterialController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public MaterialResponse update(@PathVariable Long id, @Valid @RequestBody MaterialRequest request) {
         return materialService.update(id, request);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         materialService.delete(id);
         return ResponseEntity.noContent().build();

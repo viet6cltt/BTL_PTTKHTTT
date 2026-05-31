@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,6 +38,7 @@ public class AudioVisualEquipmentController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AudioVisualEquipmentResponse> create(
             @Valid @RequestBody AudioVisualEquipmentRequest request
     ) {
@@ -47,6 +49,7 @@ public class AudioVisualEquipmentController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public AudioVisualEquipmentResponse update(
             @PathVariable Long id,
             @Valid @RequestBody AudioVisualEquipmentRequest request
@@ -55,6 +58,7 @@ public class AudioVisualEquipmentController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         equipmentService.delete(id);
         return ResponseEntity.noContent().build();

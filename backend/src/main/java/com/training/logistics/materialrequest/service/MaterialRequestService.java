@@ -74,6 +74,7 @@ public class MaterialRequestService {
 
     public MaterialRequestResponse create(Long seminarId, MaterialRequestCreateRequest request) {
         Seminar seminar = requireSeminar(seminarId);
+        ensureCurrentCoordinatorOwnsSeminar(seminar);
         LocalDate requestDate = LocalDate.now();
         LocalDate neededByDate = MaterialRequestValidation.requireDate(request.neededByDate(), "neededByDate");
         if (neededByDate.isBefore(requestDate)) {
