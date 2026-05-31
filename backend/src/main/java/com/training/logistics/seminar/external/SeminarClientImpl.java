@@ -40,4 +40,13 @@ public class SeminarClientImpl implements SeminarClient {
     public void markFacilitySecured(Long seminarId) {
         seminarService.markFacilitySecured(seminarId);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Integer> getAnticipatedRegistrants(Long seminarId) {
+        if (seminarId == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(seminarService.findEntity(seminarId).getAnticipatedRegistrants());
+    }
 }
