@@ -3,13 +3,11 @@ package com.training.logistics.facility_contract.external;
 import java.util.Optional;
 
 /**
- * Interface nay dung de goi sang Module Masterdata (do nhom khac dam nhan).
- * Hien tai de trong/gia lap de phuc vu test noi bo module facility_contract.
+ * Interface nay dung de module facility_contract hoi du lieu masterdata/seminar
+ * trong modular monolith ma khong phu thuoc truc tiep vao repository cua module khac.
  */
 public interface MasterDataClient {
-    // TODO: Nhom Masterdata se trien khai (implement) ham nay sau
     boolean existsEquipmentById(Long equipmentId);
 
-    // TODO: Nhom Seminar/Masterdata se trien khai ham nay sau
     Optional<Integer> getAnticipatedRegistrants(Long seminarId);
 }

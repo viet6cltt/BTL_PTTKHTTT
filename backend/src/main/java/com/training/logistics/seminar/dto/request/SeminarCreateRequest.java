@@ -1,5 +1,6 @@
 package com.training.logistics.seminar.dto.request;
 
+import com.training.logistics.seminar.model.TimeSlot;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -8,12 +9,10 @@ import java.time.LocalDate;
 public record SeminarCreateRequest(
         @NotNull Long seminarTypeId,
         @NotNull Long consultantId,
-        @NotNull Long bookingDepartmentUserId,
-        @NotBlank String seminarName,
         @NotNull LocalDate startDate,
         @NotNull LocalDate endDate,
+        @NotNull TimeSlot expectedTimeSlot,
         @NotBlank String city,
-        @NotNull @Positive Integer anticipatedRegistrants,
-        String note
+        @NotNull @Positive Integer anticipatedRegistrants
 ) {
 }

@@ -25,7 +25,7 @@ public class ConsultantController {
     private final ConsultantService consultantService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BOOKING_STAFF', 'LOGISTICS_COORDINATOR', 'ADMIN')")
     public ResponseEntity<Page<ConsultantResponse>> searchConsultants(
             @RequestParam(required = false) String specialty,
             @RequestParam(required = false) String city,

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/master-data/seminar-types")
+@RequestMapping("/api/v1/master-data/seminar-types")
 public class SeminarTypeController {
 
     private final SeminarTypeService seminarTypeService;
