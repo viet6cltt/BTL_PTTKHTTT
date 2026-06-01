@@ -6,6 +6,7 @@ import {
   LogOut,
   Plane,
   Truck,
+  UserPlus,
 } from 'lucide-react'
 import type { TabType } from '../../App'
 import { useAuth } from '../../context/AuthContext'
@@ -22,6 +23,7 @@ export function Sidebar({ currentTab, onChangeTab }: SidebarProps) {
 
   const isBooking = user.role === 'BOOKING_STAFF'
   const isConsultant = user.role === 'CONSULTANT'
+  const isAdmin = user.role === 'ADMIN'
   const canViewMaterialRequests = user.role === 'MATERIALS_STAFF'
 
   return (
@@ -40,56 +42,80 @@ export function Sidebar({ currentTab, onChangeTab }: SidebarProps) {
         </div>
 
         <nav className="space-y-4 px-4 py-8">
-          <div className="space-y-1">
-            <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
-              Seminar Booking
-            </p>
-            <button
-              type="button"
-              onClick={() => onChangeTab('LIST')}
-              className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
-                currentTab === 'LIST' || currentTab === 'DETAIL'
-                  ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
-                  : 'font-semibold text-white/90 hover:bg-white/10'
-              }`}
-            >
-              <Calendar className="h-5.5 w-5.5 shrink-0" />
-              <span>Danh sách seminar</span>
-            </button>
-
-            {isBooking && (
+          {!isConsultant && (
+            <div className="space-y-1">
+              <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
+                Seminar Booking
+              </p>
               <button
                 type="button"
-                onClick={() => onChangeTab('CREATE')}
+                onClick={() => onChangeTab('LIST')}
                 className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
-                  currentTab === 'CREATE'
+                  currentTab === 'LIST' || currentTab === 'DETAIL'
                     ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
                     : 'font-semibold text-white/90 hover:bg-white/10'
                 }`}
               >
-                <ClipboardList className="h-5.5 w-5.5 shrink-0" />
-                <span>Tạo seminar mới</span>
+                <Calendar className="h-5.5 w-5.5 shrink-0" />
+                <span>Danh sách seminar</span>
               </button>
-            )}
-          </div>
 
-          <div className="space-y-1 border-t border-white/10 pt-4">
-            <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
-              Dữ liệu hệ thống
-            </p>
-            <button
-              type="button"
-              onClick={() => onChangeTab('MASTER_DATA')}
-              className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
-                currentTab === 'MASTER_DATA' || currentTab === 'SEMINAR_TYPE_DETAIL'
-                  ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
-                  : 'font-semibold text-white/90 hover:bg-white/10'
-              }`}
-            >
-              <Database className="h-5.5 w-5.5 shrink-0" />
-              <span>Master data</span>
-            </button>
-          </div>
+              {isBooking && (
+                <button
+                  type="button"
+                  onClick={() => onChangeTab('CREATE')}
+                  className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
+                    currentTab === 'CREATE'
+                      ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
+                      : 'font-semibold text-white/90 hover:bg-white/10'
+                  }`}
+                >
+                  <ClipboardList className="h-5.5 w-5.5 shrink-0" />
+                  <span>Tạo seminar mới</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {!isConsultant && (
+            <div className="space-y-1 border-t border-white/10 pt-4">
+              <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
+                Dữ liệu hệ thống
+              </p>
+              <button
+                type="button"
+                onClick={() => onChangeTab('MASTER_DATA')}
+                className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
+                  currentTab === 'MASTER_DATA' || currentTab === 'SEMINAR_TYPE_DETAIL'
+                    ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
+                    : 'font-semibold text-white/90 hover:bg-white/10'
+                }`}
+              >
+                <Database className="h-5.5 w-5.5 shrink-0" />
+                <span>Master data</span>
+              </button>
+            </div>
+          )}
+
+          {isAdmin && (
+            <div className="space-y-1 border-t border-white/10 pt-4">
+              <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
+                Quản trị tài khoản
+              </p>
+              <button
+                type="button"
+                onClick={() => onChangeTab('CREATE_USER')}
+                className={`flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left text-[15px] transition ${
+                  currentTab === 'CREATE_USER'
+                    ? 'border-l-4 border-[#5DF8D8] bg-[#0D5A84]/80 font-bold text-[#5DF8D8] shadow-lg shadow-cyan-950/20'
+                    : 'font-semibold text-white/90 hover:bg-white/10'
+                }`}
+              >
+                <UserPlus className="h-5.5 w-5.5 shrink-0" />
+                <span>Đăng ký tài khoản</span>
+              </button>
+            </div>
+          )}
 
           {isConsultant && (
             <div className="space-y-1 border-t border-white/10 pt-4">

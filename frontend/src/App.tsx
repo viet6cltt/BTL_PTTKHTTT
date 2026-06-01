@@ -8,6 +8,7 @@ import { MyTravelPage } from './pages/MyTravelPage'
 import { AllMaterialsPage } from './pages/AllMaterialsPage'
 import { MasterDataManagementPage } from './pages/MasterDataManagementPage'
 import { SeminarTypeDetailPage } from './pages/SeminarTypeDetailPage'
+import { CreateUserPage } from './pages/CreateUserPage'
 import { Sidebar } from './components/layout/Sidebar'
 import { TopNavbar } from './components/layout/TopNavbar'
 
@@ -19,6 +20,7 @@ export type TabType =
   | 'ALL_MATERIALS'
   | 'MASTER_DATA'
   | 'SEMINAR_TYPE_DETAIL'
+  | 'CREATE_USER'
 
 type AppRoute = {
   tab: TabType
@@ -42,6 +44,10 @@ function parseRoute(pathname: string): AppRoute {
 
   if (pathname === '/materials') {
     return { tab: 'ALL_MATERIALS', seminarId: null, seminarTypeId: null }
+  }
+
+  if (pathname === '/users/new') {
+    return { tab: 'CREATE_USER', seminarId: null, seminarTypeId: null }
   }
 
   const seminarTypeDetailMatch = pathname.match(/^\/master-data\/seminar-types\/(\d+)$/)
@@ -68,6 +74,7 @@ function pathForRoute(route: AppRoute) {
   }
   if (route.tab === 'MY_TRAVEL') return '/my-travel'
   if (route.tab === 'ALL_MATERIALS') return '/materials'
+  if (route.tab === 'CREATE_USER') return '/users/new'
   if (route.tab === 'MASTER_DATA') return '/master-data'
   return '/seminars'
 }
@@ -100,6 +107,15 @@ function AppContent() {
   const canViewMasterData = Boolean(user)
   const canModifyMasterData = user?.role === 'ADMIN'
   const canViewMaterialRequests = user?.role === 'MATERIALS_STAFF'
+  const canCreateUsers = user?.role === 'ADMIN'
+
+  useEffect(() => {
+    if (user?.role === 'CONSULTANT' && route.tab !== 'MY_TRAVEL') {
+      const consultantRoute = { tab: 'MY_TRAVEL' as const, seminarId: null, seminarTypeId: null }
+      window.history.replaceState(null, '', pathForRoute(consultantRoute))
+      setRoute(consultantRoute)
+    }
+  }, [route.tab, user?.role])
 
   if (isLoading) {
     return (
@@ -129,7 +145,7 @@ function AppContent() {
         <main className="relative overflow-hidden px-6 py-8 md:px-8 lg:px-6 xl:px-8">
           <div className="pointer-events-none absolute -right-36 top-11 h-100 w-100 rounded-full bg-[#5DF8D8]/20 blur-3xl" />
           <div className="relative mx-auto max-w-[1220px]">
-            {currentTab === 'LIST' && (
+            {user.role !== 'CONSULTANT' && currentTab === 'LIST' && (
               <SeminarListPage
                 onSelectSeminar={(id) => {
                   navigate({ tab: 'DETAIL', seminarId: id, seminarTypeId: null })
@@ -149,7 +165,7 @@ function AppContent() {
                 }}
               />
             )}
-            {currentTab === 'DETAIL' && selectedSeminarId !== null && (
+            {user.role !== 'CONSULTANT' && currentTab === 'DETAIL' && selectedSeminarId !== null && (
               <SeminarDetailPage
                 seminarId={selectedSeminarId}
                 onBack={() => {
@@ -157,8 +173,9 @@ function AppContent() {
                 }}
               />
             )}
-            {currentTab === 'MY_TRAVEL' && <MyTravelPage />}
+            {user.role === 'CONSULTANT' && currentTab === 'MY_TRAVEL' && <MyTravelPage />}
             {currentTab === 'ALL_MATERIALS' && canViewMaterialRequests && <AllMaterialsPage />}
+            {currentTab === 'CREATE_USER' && canCreateUsers && <CreateUserPage />}
             {currentTab === 'MASTER_DATA' && canViewMasterData && (
               <MasterDataManagementPage
                 onSelectSeminarType={(id) => {
@@ -178,7 +195,9 @@ function AppContent() {
                 />
               )}
             {((currentTab === 'CREATE' && !canCreateSeminar) ||
+              (currentTab === 'MY_TRAVEL' && user.role !== 'CONSULTANT') ||
               (currentTab === 'ALL_MATERIALS' && !canViewMaterialRequests) ||
+              (currentTab === 'CREATE_USER' && !canCreateUsers) ||
               ((currentTab === 'MASTER_DATA' || currentTab === 'SEMINAR_TYPE_DETAIL') &&
                 !canViewMasterData)) && (
               <SeminarListPage

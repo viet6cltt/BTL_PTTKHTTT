@@ -2,6 +2,7 @@ const API_ROOT_URL = 'http://localhost:8080'
 const API_BASE_URL = `${API_ROOT_URL}/api/v1`
 
 export type UserRole = 'BOOKING_STAFF' | 'LOGISTICS_COORDINATOR' | 'CONSULTANT' | 'MATERIALS_STAFF' | 'ADMIN'
+export type UserStatus = 'ACTIVE' | 'DISABLED'
 export type TravelArrangementStatus = 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
 
 export interface AuthResponse {
@@ -9,6 +10,34 @@ export interface AuthResponse {
   userId: number
   role: UserRole
   fullName: string
+}
+
+export interface CreateUserRequest {
+  fullName: string
+  email: string
+  password: string
+  phone: string
+  role: UserRole
+  status: UserStatus
+}
+
+export interface UpdateUserRequest {
+  fullName?: string
+  email?: string
+  password?: string
+  phone?: string
+  role?: UserRole
+  status?: UserStatus
+}
+
+export interface UserResponse {
+  userId: number
+  fullName: string
+  email: string
+  phone: string
+  role: UserRole
+  status: UserStatus
+  createdAt: string
 }
 
 export type SeminarStatus = 'PENDING_LOGISTICS' | 'FACILITY_SECURED' | 'TRAVEL_CONFIRMED' | 'READY_FOR_SEMINAR' | 'CANCELLED'
@@ -143,7 +172,7 @@ export interface ConsultantResponse {
   userId: number
   fullName: string
   email: string
-  phone: string
+  phone: string | null
   specialty: string | null
   travelPreference: string | null
   address: string | null
@@ -326,6 +355,62 @@ export const api = {
     return handleResponse<AuthResponse>(res)
   },
 
+  async createUser(data: CreateUserRequest): Promise<UserResponse> {
+    const res = await fetch(`${API_BASE_URL}/users`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<UserResponse>(res)
+  },
+
+  async getUsers(filters: {
+    keyword?: string
+    role?: UserRole | ''
+    status?: UserStatus | ''
+    page?: number
+    size?: number
+  } = {}): Promise<PageResponse<UserResponse>> {
+    const params = new URLSearchParams()
+    if (filters.keyword) params.append('keyword', filters.keyword)
+    if (filters.role) params.append('role', filters.role)
+    if (filters.status) params.append('status', filters.status)
+    if (filters.page !== undefined) params.append('page', String(filters.page))
+    if (filters.size !== undefined) params.append('size', String(filters.size))
+
+    const res = await fetch(`${API_BASE_URL}/users?${params.toString()}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<PageResponse<UserResponse>>(res)
+  },
+
+  async updateUser(id: number, data: UpdateUserRequest): Promise<UserResponse> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<UserResponse>(res)
+  },
+
+  async updateUserStatus(id: number, status: UserStatus): Promise<UserResponse> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/status`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ status }),
+    })
+    return handleResponse<UserResponse>(res)
+  },
+
+  async resetUserPassword(id: number, temporaryPassword: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/reset-password`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ temporaryPassword }),
+    })
+    return handleResponse<void>(res)
+  },
+
   // Seminars
   async getSeminars(filters: {
     status?: string
@@ -337,7 +422,7 @@ export const api = {
     const params = new URLSearchParams()
     if (filters.status) params.append('status', filters.status)
     if (filters.city) params.append('city', filters.city)
-    if (filters.coordinatorId) params.append('coordinatorId', String(filters.coordinatorId))
+    if (filters.coordinatorId !== undefined) params.append('coordinatorId', String(filters.coordinatorId))
     if (filters.page !== undefined) params.append('page', String(filters.page))
     if (filters.size !== undefined) params.append('size', String(filters.size))
 

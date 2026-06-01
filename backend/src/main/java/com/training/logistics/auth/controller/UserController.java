@@ -4,10 +4,14 @@ import com.training.logistics.auth.dto.CreateUserRequest;
 import com.training.logistics.auth.dto.ResetPasswordRequest;
 import com.training.logistics.auth.dto.UpdateMyProfileRequest;
 import com.training.logistics.auth.dto.UpdateUserRequest;
+import com.training.logistics.auth.dto.UpdateUserStatusRequest;
 import com.training.logistics.auth.dto.UserResponse;
+import com.training.logistics.auth.model.UserRole;
+import com.training.logistics.auth.model.UserStatus;
 import com.training.logistics.auth.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -35,6 +40,17 @@ public class UserController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserResponse> updateCurrentUser(@Valid @RequestBody UpdateMyProfileRequest request) {
         return ResponseEntity.ok(userService.updateCurrentUserProfile(request));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Page<UserResponse>> getUsers(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) UserRole role,
+            @RequestParam(required = false) UserStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(userService.getUsers(keyword, role, status, page, size));
     }
 
     @PostMapping
@@ -64,5 +80,13 @@ public class UserController {
             @Valid @RequestBody ResetPasswordRequest request) {
         userService.resetUserPassword(id, request);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> updateUserStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateUserStatusRequest request) {
+        return ResponseEntity.ok(userService.updateUserStatus(id, request.getStatus()));
     }
 }

@@ -412,7 +412,7 @@ function TravelLeg({
         />
       </div>
 
-      {status === 'BOOKED' && (
+      {status !== 'CANCELLED' && (
         <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
           <button
             type="button"
@@ -423,15 +423,17 @@ function TravelLeg({
             <XCircle className="h-4 w-4" />
             Hủy chặng
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isUpdating}
-            className="flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-teal-600 disabled:cursor-wait disabled:bg-teal-300"
-          >
-            <TicketCheck className="h-4 w-4" />
-            {isUpdating ? 'Đang xác nhận...' : 'Xác nhận chặng này'}
-          </button>
+          {status === 'BOOKED' && (
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={isUpdating}
+              className="flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-teal-600 disabled:cursor-wait disabled:bg-teal-300"
+            >
+              <TicketCheck className="h-4 w-4" />
+              {isUpdating ? 'Đang xác nhận...' : 'Xác nhận chặng này'}
+            </button>
+          )}
         </div>
       )}
     </article>
