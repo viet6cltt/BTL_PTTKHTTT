@@ -138,6 +138,26 @@ export interface TravelItineraryResponse {
   overallStatus: TravelArrangementStatus
 }
 
+export interface ConsultantResponse {
+  consultantId: number
+  userId: number
+  fullName: string
+  email: string
+  phone: string
+  specialty: string | null
+  travelPreference: string | null
+  address: string | null
+  city: string | null
+  country: string | null
+}
+
+export interface UpdateMyConsultantProfileRequest {
+  travelPreference?: string | null
+  address?: string | null
+  city?: string | null
+  country?: string | null
+}
+
 export interface MaterialRequestItem {
   materialId: number
   materialName: string
@@ -174,7 +194,7 @@ export interface FacilityResponse {
   costForEachDay: number
 }
 
-export interface FacilityRequest {
+export interface FacilityCreateRequest {
   facilityName: string
   address: string
   city: string
@@ -184,19 +204,6 @@ export interface FacilityRequest {
   salesManagerEmail?: string
   numberOfRoom?: number
   costForEachDay?: number
-}
-
-export interface ConsultantResponse {
-  consultantId: number
-  userId: number
-  fullName: string
-  email: string
-  phone: string
-  specialty: string | null
-  travelPreference: string | null
-  address: string | null
-  city: string | null
-  country: string | null
 }
 
 export interface AudioVisualEquipmentResponse {
@@ -391,7 +398,7 @@ export const api = {
     return handleResponse<PageResponse<FacilityResponse>>(res)
   },
 
-  async createFacility(data: FacilityRequest): Promise<FacilityResponse> {
+  async createFacility(data: FacilityCreateRequest): Promise<FacilityResponse> {
     const res = await fetch(`${API_BASE_URL}/facilities`, {
       method: 'POST',
       headers: getHeaders(),
@@ -673,12 +680,7 @@ export const api = {
     return handleResponse<ConsultantResponse>(res)
   },
 
-  async updateMyConsultantProfile(data: {
-    travelPreference?: string
-    address?: string
-    city?: string
-    country?: string
-  }): Promise<ConsultantResponse> {
+  async updateMyConsultantProfile(data: UpdateMyConsultantProfileRequest): Promise<ConsultantResponse> {
     const res = await fetch(`${API_BASE_URL}/consultants/me`, {
       method: 'PUT',
       headers: getHeaders(),

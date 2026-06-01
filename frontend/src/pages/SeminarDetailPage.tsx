@@ -449,7 +449,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
     }
   }
 
-  async function handleUpdateShipment(requestId: number, nextStatus: 'PACKED' | 'SHIPPED' | 'DELIVERED') {
+  async function handleUpdateShipment(requestId: number, nextStatus: 'PACKED' | 'SHIPPED') {
     try {
       setErrorMsg(null)
       await api.updateShipmentStatus(requestId, nextStatus)
@@ -1431,20 +1431,11 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                                 Bàn giao đơn vị vận chuyển (SHIPPED)
                               </button>
                             )}
-                            {m.shipmentStatus === 'SHIPPED' && (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateShipment(m.id, 'DELIVERED')}
-                                className="rounded bg-teal-500 px-3 py-1.5 text-[11px] font-black text-white hover:bg-teal-600 transition shadow-sm"
-                              >
-                                Đã giao tới khách sạn (DELIVERED)
-                              </button>
-                            )}
                           </div>
                         )}
 
                         {/* Coordinator receipt verification */}
-                        {canManageSeminarLogistics && m.shipmentStatus === 'DELIVERED' && !m.deliveredConfirmedAt && (
+                        {isCoordinatorRole && seminar.coordinatorId === user.userId && m.shipmentStatus === 'SHIPPED' && !m.deliveredConfirmedAt && (
                           <div className="border-t border-slate-100 pt-3 flex justify-end">
                             <button
                               type="button"

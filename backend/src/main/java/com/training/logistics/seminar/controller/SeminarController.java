@@ -38,7 +38,7 @@ public class SeminarController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('BOOKING_STAFF', 'LOGISTICS_COORDINATOR', 'ADMIN', 'CONSULTANT')")
+    @PreAuthorize("hasAnyRole('BOOKING_STAFF', 'LOGISTICS_COORDINATOR', 'MATERIALS_STAFF', 'ADMIN', 'CONSULTANT')")
     public ResponseEntity<Page<SeminarResponse>> search(
             @RequestParam(required = false) SeminarStatus status,
             @RequestParam(required = false) String city,
