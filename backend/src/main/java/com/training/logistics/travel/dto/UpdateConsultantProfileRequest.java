@@ -18,4 +18,6 @@ public class UpdateConsultantProfileRequest {
 
     @Size(max = 100)
     private String country;
+
+    private String avatarUrl;
 }

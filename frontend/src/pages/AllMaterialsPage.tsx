@@ -18,7 +18,7 @@ export function AllMaterialsPage() {
       const data = await api.getAllMaterialRequests()
       setRequests(data || [])
     } catch (err: any) {
-      setErrorMsg('Không thể kết nối lấy danh sách yêu cầu vận chuyển giáo trình.')
+      setErrorMsg('Không thể kết nối lấy danh sách yêu cầu vận chuyển vật tư.')
     } finally {
       setIsLoading(false)
     }
@@ -52,8 +52,8 @@ export function AllMaterialsPage() {
   return (
     <div className="space-y-7 text-left">
       <PageHeader
-        title="Quản lý Vận chuyển Tài liệu"
-        description="Đóng gói, theo dõi hành trình và giao nhận các thùng tài liệu học tập, giáo trình tới khách sạn"
+        title="Quản lý Vận chuyển Vật tư"
+        description="Đóng gói, theo dõi hành trình và giao nhận các kiện materials tới địa điểm tổ chức"
         icon={<Truck className="h-10 w-10" strokeWidth={2.4} />}
       />
 
@@ -91,14 +91,14 @@ export function AllMaterialsPage() {
                 REQUESTED: 'Đã tiếp nhận yêu cầu',
                 PACKED: 'Đã đóng gói hoàn tất',
                 SHIPPED: 'Đang trên đường giao',
-                DELIVERED: 'Đã giao tới lễ tân',
+                DELIVERED: 'Đã giao tới facility',
               }
 
               return (
                 <div key={r.id} className="border border-slate-200 bg-slate-50/20 rounded-2xl p-5 space-y-4 text-xs leading-5">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b pb-3 gap-2">
                     <div>
-                      <h4 className="font-black text-[#0B3970] text-sm">Kiện giáo trình Seminar: {r.seminarName}</h4>
+                      <h4 className="font-black text-[#0B3970] text-sm">Kiện vật tư Seminar: {r.seminarName}</h4>
                       <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Yêu cầu ID: #{r.id} • Hợp đồng Venue: #{r.contractId || 'N/A'}</p>
                     </div>
                     <span className={`rounded-sm border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide shrink-0 ${shipmentStyles[r.shipmentStatus] || 'bg-slate-100'}`}>
@@ -163,6 +163,11 @@ export function AllMaterialsPage() {
                           Giao cho đối tác Viettel Post (SHIPPED)
                         </button>
                       )}
+                      {r.shipmentStatus === 'SHIPPED' && (
+                        <span className="rounded border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-black text-indigo-700">
+                          Đang chờ điều phối viên xác nhận nhận hàng
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -170,7 +175,7 @@ export function AllMaterialsPage() {
             })
           ) : (
             <div className="py-12 text-center text-slate-400 font-bold">
-              Hiện tại chưa có yêu cầu gửi vật liệu học tập nào.
+              Hiện tại chưa có yêu cầu vận chuyển vật tư nào.
             </div>
           )}
         </div>

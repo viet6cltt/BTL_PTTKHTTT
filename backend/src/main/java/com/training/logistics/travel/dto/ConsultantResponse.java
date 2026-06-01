@@ -16,4 +16,5 @@ public class ConsultantResponse {
     private String address;
     private String city;
     private String country;
+    private String avatarUrl;
 }

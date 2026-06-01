@@ -18,6 +18,7 @@ import com.training.logistics.materialrequest.model.MaterialRequestItem;
 import com.training.logistics.materialrequest.model.ShipmentStatus;
 import com.training.logistics.materialrequest.repository.MaterialRequestRepository;
 import com.training.logistics.seminar.model.Seminar;
+import com.training.logistics.seminar.model.SeminarStatus;
 import com.training.logistics.seminar.repository.SeminarRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,6 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class MaterialRequestService {
+    private static final Set<SeminarStatus> CLOSED_SEMINAR_STATUSES = Set.of(
+            SeminarStatus.READY_FOR_SEMINAR,
+            SeminarStatus.CANCELLED
+    );
+
 
     private final MaterialRequestRepository materialRequestRepository;
     private final SeminarRepository seminarRepository;
@@ -79,6 +85,9 @@ public class MaterialRequestService {
         LocalDate neededByDate = MaterialRequestValidation.requireDate(request.neededByDate(), "neededByDate");
         if (neededByDate.isBefore(requestDate)) {
             throw new BadRequestException("neededByDate must be on or after requestDate");
+        }
+        if (neededByDate.isAfter(seminar.getStartDate())) {
+            throw new BadRequestException("neededByDate must be on or before seminar startDate");
         }
 
         MaterialRequest materialRequest = new MaterialRequest();
@@ -201,6 +210,10 @@ public class MaterialRequestService {
     }
 
     private void ensureCurrentCoordinatorOwnsSeminar(Seminar seminar) {
+        if (seminar.getStatus() == SeminarStatus.OVERDUE
+                || seminar.getStartDate().isBefore(LocalDate.now()) && !CLOSED_SEMINAR_STATUSES.contains(seminar.getStatus())) {
+            throw new ConflictException("Seminar is overdue and no longer editable by coordinator");
+        }
         if (seminar.getCoordinator() == null) {
             throw new ConflictException("Seminar has not been assigned to a logistics coordinator");
         }

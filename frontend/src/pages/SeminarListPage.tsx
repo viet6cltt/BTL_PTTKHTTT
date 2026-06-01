@@ -6,6 +6,12 @@ import {
   Inbox,
   ListChecks,
   PlusCircle,
+  AlertTriangle,
+  Clock,
+  CheckCircle,
+  TrendingUp,
+  ChevronDown,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { useMemo, useState, useEffect, type FormEvent } from 'react'
 import {
@@ -15,10 +21,17 @@ import {
   FilterTextInput,
 } from '../components/filter/FilterPanel'
 import { PageHeader } from '../components/layout/PageHeader'
-import { api, SeminarResponse } from '../api'
+import { api, SeminarResponse, type SeminarStatus, type UserRole } from '../api'
 import { useAuth } from '../context/AuthContext'
 
 const PAGE_SIZE = 10
+const FINAL_SEMINAR_STATUSES: SeminarStatus[] = [
+  'PENDING_LOGISTICS',
+  'FACILITY_SECURED',
+  'TRAVEL_CONFIRMED',
+  'READY_FOR_SEMINAR',
+  'OVERDUE',
+]
 
 const cardClass = 'rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70'
 const tableCellClass = 'px-4 py-4 lg:px-5'
@@ -47,6 +60,33 @@ const defaultFilters: FilterState = {
   seminarDateTo: '',
 }
 
+function isSeminarOverdueLocked(seminar: SeminarResponse) {
+  return seminar.status === 'OVERDUE' ||
+    (seminar.startDate < getTodayInputValue() && seminar.status !== 'READY_FOR_SEMINAR' && seminar.status !== 'CANCELLED')
+}
+
+function getTodayInputValue() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function seminarStatusLabel(seminar: SeminarResponse, labels: Record<string, string>) {
+  if (isSeminarOverdueLocked(seminar)) {
+    return 'Quá hạn xử lý'
+  }
+  return labels[seminar.status] || seminar.status
+}
+
+function seminarStatusStyle(seminar: SeminarResponse, styles: Record<string, string>) {
+  if (isSeminarOverdueLocked(seminar)) {
+    return 'bg-rose-50 text-rose-700 border-rose-200'
+  }
+  return styles[seminar.status] || 'bg-slate-100 text-slate-600 border-slate-200'
+}
+
 interface SeminarListPageProps {
   onSelectSeminar: (id: number) => void
   onCreateSeminarClick: () => void
@@ -61,6 +101,7 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
   const [coordinatorScope, setCoordinatorScope] = useState<CoordinatorScope>('ALL')
   const [page, setPage] = useState(1)
+  const [isFilterVisible, setIsFilterVisible] = useState(false)
 
   // Fetch seminars on mount
   useEffect(() => {
@@ -75,7 +116,7 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
               ? user.userId
               : undefined,
         })
-        setSeminarRows(response.content || [])
+        setSeminarRows(scopeSeminarsForRole(response.content || [], user?.role))
       } catch (err: any) {
         setErrorMsg(err.message || 'Không thể tải danh sách seminar. Vui lòng kiểm tra kết nối.')
       } finally {
@@ -95,7 +136,7 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
         size: 1000,
         coordinatorId: coordinatorScope === 'MINE' ? user.userId : undefined,
       })
-      setSeminarRows(response.content || [])
+      setSeminarRows(scopeSeminarsForRole(response.content || [], user.role))
     } catch (err: any) {
       setErrorMsg(err.message || 'Lỗi nhận nhiệm vụ.')
     } finally {
@@ -117,22 +158,39 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
     [seminarRows],
   )
 
-  const statusOptions = [
-    { value: '', label: 'Tất cả trạng thái' },
-    { value: 'PENDING_LOGISTICS', label: 'Chờ lên lịch Hậu cần' },
-    { value: 'FACILITY_SECURED', label: 'Đã thuê Khách sạn' },
-    { value: 'TRAVEL_CONFIRMED', label: 'Đã chốt Vé xe/máy bay' },
-    { value: 'READY_FOR_SEMINAR', label: 'Sẵn sàng tổ chức' },
-    { value: 'CANCELLED', label: 'Đã hủy bỏ' },
-  ]
+  const statusOptions = useMemo(() => {
+    const options = [
+      { value: '', label: 'Tất cả trạng thái' },
+      { value: 'PENDING_LOGISTICS', label: 'Chờ lên lịch Hậu cần' },
+      { value: 'FACILITY_SECURED', label: 'Đã thuê Khách sạn' },
+      { value: 'TRAVEL_CONFIRMED', label: 'Đã chốt Vé xe/máy bay' },
+      { value: 'READY_FOR_SEMINAR', label: 'Sẵn sàng tổ chức' },
+      { value: 'OVERDUE', label: 'Quá hạn xử lý' },
+    ]
+
+    if (user?.role === 'ADMIN') {
+      options.push({ value: 'CANCELLED', label: 'Đã hủy bỏ' })
+    }
+
+    return options
+  }, [user?.role])
 
   const filteredSeminars = useMemo(
-    () =>
-      seminarRows.filter(
+    () => {
+      const filtered = seminarRows.filter(
         (seminar) =>
           matchesCoordinatorScope(seminar, coordinatorScope, user?.userId) &&
           matchesFilters(seminar, filters),
-      ),
+      )
+      // Sort OVERDUE to the top
+      return [...filtered].sort((a, b) => {
+        const aOverdue = isSeminarOverdueLocked(a)
+        const bOverdue = isSeminarOverdueLocked(b)
+        if (aOverdue && !bOverdue) return -1
+        if (!aOverdue && bOverdue) return 1
+        return 0
+      })
+    },
     [seminarRows, filters, coordinatorScope, user?.userId],
   )
 
@@ -166,13 +224,22 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
   }
 
   const isBookingStaff = user?.role === 'BOOKING_STAFF'
+  const listTitle = isBookingStaff ? 'Seminar đã chốt cần Booking xử lý' : 'Tất cả Seminar Booking'
+  const listDescription = isBookingStaff
+    ? 'Chỉ hiển thị các seminar đã chuyển sang phạm vi hậu cần'
+    : 'Theo dõi, tìm kiếm và quản lý các seminar logistics trực tuyến'
+
+  const totalSeminars = seminarRows.length
+  const overdueCount = useMemo(() => seminarRows.filter(isSeminarOverdueLocked).length, [seminarRows])
+  const pendingCount = useMemo(() => seminarRows.filter(s => s.status === 'PENDING_LOGISTICS' && !isSeminarOverdueLocked(s)).length, [seminarRows])
+  const readyCount = useMemo(() => seminarRows.filter(s => s.status === 'READY_FOR_SEMINAR').length, [seminarRows])
 
   return (
     <div className="space-y-7">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <PageHeader
           title="Danh sách seminar"
-          description="Theo dõi, tìm kiếm và quản lý các seminar logistics trực tuyến"
+          description={listDescription}
           icon={<ListChecks className="h-10 w-10" strokeWidth={2.4} />}
         />
         {isBookingStaff && (
@@ -193,57 +260,161 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
         </div>
       )}
 
-      <FilterPanel
-        title="Bộ lọc tìm kiếm nâng cao"
-        onSubmit={handleSearch}
-        onReset={resetFilters}
-      >
-        <FilterTextInput
-          id="searchTerm"
-          label="Tên seminar"
-          placeholder="Tìm theo tên seminar..."
-          value={filters.searchTerm}
-          onChange={(value) => updateFilter('searchTerm', value)}
-        />
-        <FilterSelect
-          id="seminarTypeId"
-          label="Loại seminar"
-          options={seminarTypeOptions}
-          value={filters.seminarTypeId}
-          onChange={(value) => updateFilter('seminarTypeId', value)}
-        />
-        <FilterSelect
-          id="status"
-          label="Trạng thái xử lý"
-          options={statusOptions}
-          value={filters.status}
-          onChange={(value) => updateFilter('status', value)}
-        />
-        <FilterSelect
-          id="city"
-          label="Thành phố"
-          options={cityOptions}
-          value={filters.city}
-          onChange={(value) => updateFilter('city', value)}
-        />
-        <div className="md:col-span-2 xl:col-span-4 grid gap-4 lg:grid-cols-2">
-          <FilterDateRange
-            label="Khoảng thời gian tổ chức seminar"
-            start={{
-              id: 'seminarDateFrom',
-              label: 'Từ ngày',
-              value: filters.seminarDateFrom,
-              onChange: (value) => updateFilter('seminarDateFrom', value),
-            }}
-            end={{
-              id: 'seminarDateTo',
-              label: 'Đến ngày',
-              value: filters.seminarDateTo,
-              onChange: (value) => updateFilter('seminarDateTo', value),
-            }}
-          />
+      {/* Dashboard Stats */}
+      {!isBookingStaff && (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Card 1 */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/50 transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-200/80">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tổng số Seminar</p>
+                <h3 className="mt-2 text-3xl font-black text-[#092F5A]">{totalSeminars}</h3>
+              </div>
+              <div className="rounded-xl bg-[#E8F5FF] p-3 text-[#126CB0]">
+                <ListChecks className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
+              <TrendingUp className="h-3.5 w-3.5 text-teal-500" />
+              <span className="font-semibold text-teal-600">Đầy đủ dữ liệu</span> hệ thống
+            </div>
+          </div>
+
+          {/* Card 2 */}
+          <div className={`rounded-2xl border bg-white p-5 shadow-xl transition duration-300 hover:-translate-y-1 hover:shadow-2xl ${
+            overdueCount > 0 
+              ? 'border-rose-200 shadow-rose-100/50 hover:shadow-rose-200/60 ring-2 ring-rose-500/10' 
+              : 'border-slate-200 shadow-slate-200/50 hover:shadow-slate-200/80'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quá hạn xử lý</p>
+                <h3 className="mt-2 text-3xl font-black text-rose-600 flex items-center gap-2">
+                  {overdueCount}
+                  {overdueCount > 0 && (
+                    <span className="flex h-2.5 w-2.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                    </span>
+                  )}
+                </h3>
+              </div>
+              <div className={`rounded-xl p-3 ${
+                overdueCount > 0 ? 'bg-rose-50 text-rose-600 animate-pulse' : 'bg-slate-100 text-slate-400'
+              }`}>
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-1.5 text-xs">
+              <span className={`font-semibold ${overdueCount > 0 ? 'text-rose-600 animate-pulse' : 'text-slate-500'}`}>
+                {overdueCount > 0 ? 'Cần ưu tiên xử lý ngay' : 'Không có quá hạn'}
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3 */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/50 transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-200/80">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chờ lên lịch Hậu cần</p>
+                <h3 className="mt-2 text-3xl font-black text-amber-600">{pendingCount}</h3>
+              </div>
+              <div className="rounded-xl bg-amber-50 p-3 text-amber-600">
+                <Clock className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="font-semibold text-amber-600">Đang chờ</span> điều phối viên nhận việc
+            </div>
+          </div>
+
+          {/* Card 4 */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/50 transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-200/80">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Sẵn sàng tổ chức</p>
+                <h3 className="mt-2 text-3xl font-black text-teal-600">{readyCount}</h3>
+              </div>
+              <div className="rounded-xl bg-teal-50 p-3 text-teal-600">
+                <CheckCircle className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="font-semibold text-teal-600">Hoàn thành</span> tất cả các bước chuẩn bị
+            </div>
+          </div>
         </div>
-      </FilterPanel>
+      )}
+
+      {!isBookingStaff && (
+        <div className="space-y-4">
+          <div className="flex justify-start">
+            <button
+              type="button"
+              onClick={() => setIsFilterVisible(!isFilterVisible)}
+              className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-extrabold text-[#0B3970] shadow-md shadow-slate-200/50 transition duration-200 hover:-translate-y-0.5 hover:border-[#5DF8D8] hover:text-[#3B7597] cursor-pointer hover:shadow-lg hover:shadow-slate-200/80"
+            >
+              <SlidersHorizontal className="h-4.5 w-4.5 text-[#126CB0]" />
+              {isFilterVisible ? 'Ẩn bộ lọc nâng cao' : 'Hiện bộ lọc tìm kiếm nâng cao'}
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isFilterVisible ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {isFilterVisible && (
+            <FilterPanel
+              title="Bộ lọc tìm kiếm nâng cao"
+              onSubmit={handleSearch}
+              onReset={resetFilters}
+            >
+              <FilterTextInput
+                id="searchTerm"
+                label="Tên seminar"
+                placeholder="Tìm theo tên seminar..."
+                value={filters.searchTerm}
+                onChange={(value) => updateFilter('searchTerm', value)}
+              />
+              <FilterSelect
+                id="seminarTypeId"
+                label="Loại seminar"
+                options={seminarTypeOptions}
+                value={filters.seminarTypeId}
+                onChange={(value) => updateFilter('seminarTypeId', value)}
+              />
+              <FilterSelect
+                id="status"
+                label="Trạng thái xử lý"
+                options={statusOptions}
+                value={filters.status}
+                onChange={(value) => updateFilter('status', value)}
+              />
+              <FilterSelect
+                id="city"
+                label="Thành phố"
+                options={cityOptions}
+                value={filters.city}
+                onChange={(value) => updateFilter('city', value)}
+              />
+              <div className="md:col-span-2 xl:col-span-4 grid gap-4 lg:grid-cols-2">
+                <FilterDateRange
+                  label="Khoảng thời gian tổ chức seminar"
+                  start={{
+                    id: 'seminarDateFrom',
+                    label: 'Từ ngày',
+                    value: filters.seminarDateFrom,
+                    onChange: (value) => updateFilter('seminarDateFrom', value),
+                  }}
+                  end={{
+                    id: 'seminarDateTo',
+                    label: 'Đến ngày',
+                    value: filters.seminarDateTo,
+                    onChange: (value) => updateFilter('seminarDateTo', value),
+                  }}
+                />
+              </div>
+            </FilterPanel>
+          )}
+        </div>
+      )}
 
       {user?.role === 'LOGISTICS_COORDINATOR' && (
         <section className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70 md:flex-row md:items-center md:justify-between">
@@ -283,7 +454,7 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
         <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-5 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-lg font-extrabold text-[#092F5A]">
-              Tất cả Seminar Booking
+              {listTitle}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               Hiển thị {visibleStart} đến {visibleEnd} trong{' '}
@@ -362,6 +533,7 @@ function SeminarRow({ seminar, onClick, onClaim }: SeminarRowProps) {
     TRAVEL_CONFIRMED: 'Đã duyệt di chuyển',
     READY_FOR_SEMINAR: 'Sẵn sàng tổ chức',
     CANCELLED: 'Đã hủy',
+    OVERDUE: 'Quá hạn xử lý',
   }
 
   const statusStyles: Record<string, string> = {
@@ -370,17 +542,29 @@ function SeminarRow({ seminar, onClick, onClaim }: SeminarRowProps) {
     TRAVEL_CONFIRMED: 'bg-purple-50 text-purple-700 border-purple-200/60',
     READY_FOR_SEMINAR: 'bg-teal-50 text-teal-700 border-teal-200/60',
     CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200/60',
+    OVERDUE: 'bg-rose-50 text-rose-700 border-rose-200/60',
   }
+
+  const isOverdue = isSeminarOverdueLocked(seminar)
 
   return (
     <tr
       onClick={onClick}
-      className="cursor-pointer transition hover:bg-[#F0FFFC]"
+      className={`cursor-pointer transition border-b border-slate-100 ${
+        isOverdue
+          ? 'bg-rose-50/40 hover:bg-rose-100/50'
+          : 'hover:bg-[#F0FFFC]'
+      }`}
     >
       <td className={tableCellClass}>
-        <p className="max-w-[260px] font-extrabold leading-6 text-[#0B3970]">
-          {seminar.seminarName}
-        </p>
+        <div className="flex items-center gap-2">
+          {isOverdue && (
+            <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 animate-pulse" />
+          )}
+          <p className="max-w-[260px] font-extrabold leading-6 text-[#0B3970]">
+            {seminar.seminarName}
+          </p>
+        </div>
       </td>
       <td className={tableCellClass}>
         <SeminarTypeBadge seminar={seminar} />
@@ -398,18 +582,25 @@ function SeminarRow({ seminar, onClick, onClaim }: SeminarRowProps) {
         {seminar.anticipatedRegistrants}
       </td>
       <td className={`${tableCellClass} text-sm font-semibold text-slate-600`}>
-        {seminar.coordinatorFullName || (
-          <span className="font-bold text-amber-600">Chưa nhận</span>
+        <span className={seminar.status === 'OVERDUE' ? 'font-black text-rose-700' : ''}>
+          {seminar.coordinatorFullName || (
+            <span className="font-bold text-amber-600">Chưa nhận</span>
+          )}
+        </span>
+        {seminar.status === 'OVERDUE' && (
+          <p className="mt-1 text-[10px] font-black uppercase tracking-wide text-rose-500">
+            Phụ trách quá hạn
+          </p>
         )}
       </td>
       <td className={`${tableCellClass} text-center`}>
-        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black tracking-wide uppercase ${statusStyles[seminar.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-          {statusLabels[seminar.status] || seminar.status}
+        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black tracking-wide uppercase ${seminarStatusStyle(seminar, statusStyles)}`}>
+          {seminarStatusLabel(seminar, statusLabels)}
         </span>
       </td>
       {user?.role === 'LOGISTICS_COORDINATOR' && (
         <td className={`${tableCellClass} text-center`} onClick={(e) => e.stopPropagation()}>
-          {seminar.coordinatorId === null && seminar.status === 'PENDING_LOGISTICS' ? (
+          {seminar.coordinatorId === null && seminar.status === 'PENDING_LOGISTICS' && !isSeminarOverdueLocked(seminar) ? (
             <button
               onClick={() => onClaim(seminar.id)}
               className="px-3.5 py-1.5 text-[11px] font-black uppercase text-white bg-[#0B3970] rounded-xl hover:bg-[#18395F] transition shadow-md shadow-slate-900/10 cursor-pointer"
@@ -565,6 +756,14 @@ function matchesFilters(seminar: SeminarResponse, filters: FilterState) {
   )
 }
 
+function scopeSeminarsForRole(rows: SeminarResponse[], role?: UserRole) {
+  if (role === 'ADMIN') {
+    return rows
+  }
+
+  return rows.filter((seminar) => FINAL_SEMINAR_STATUSES.includes(seminar.status))
+}
+
 function matchesCoordinatorScope(
   seminar: SeminarResponse,
   scope: CoordinatorScope,
@@ -594,6 +793,8 @@ function formatDate(isoDate: string) {
   const [year, month, day] = isoDate.split('-')
   return `${day}/${month}/${year}`
 }
+
+
 
 function makeUniqueOptions<
   ValueKey extends keyof SeminarResponse,

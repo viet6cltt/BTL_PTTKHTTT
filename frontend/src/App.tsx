@@ -88,8 +88,19 @@ function AppContent() {
       setRoute(parseRoute(window.location.pathname))
     }
 
+    function handleCustomNavigate(event: Event) {
+      const customEvent = event as CustomEvent<AppRoute>
+      if (customEvent.detail) {
+        navigate(customEvent.detail)
+      }
+    }
+
     window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
+    window.addEventListener('app-navigate', handleCustomNavigate)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('app-navigate', handleCustomNavigate)
+    }
   }, [])
 
   function navigate(nextRoute: AppRoute) {
@@ -104,9 +115,10 @@ function AppContent() {
   const selectedSeminarId = route.seminarId
   const selectedSeminarTypeId = route.seminarTypeId
   const canCreateSeminar = user?.role === 'BOOKING_STAFF'
-  const canViewMasterData = Boolean(user)
+  const canViewMasterData = user?.role === 'ADMIN'
   const canModifyMasterData = user?.role === 'ADMIN'
   const canViewMaterialRequests = user?.role === 'MATERIALS_STAFF'
+  const isMaterialsStaff = user?.role === 'MATERIALS_STAFF'
   const canCreateUsers = user?.role === 'ADMIN'
 
   useEffect(() => {
@@ -116,6 +128,14 @@ function AppContent() {
       setRoute(consultantRoute)
     }
   }, [route.tab, user?.role])
+
+  useEffect(() => {
+    if (isMaterialsStaff && route.tab !== 'ALL_MATERIALS') {
+      const materialsRoute = { tab: 'ALL_MATERIALS' as const, seminarId: null, seminarTypeId: null }
+      window.history.replaceState(null, '', pathForRoute(materialsRoute))
+      setRoute(materialsRoute)
+    }
+  }, [isMaterialsStaff, route.tab])
 
   if (isLoading) {
     return (
@@ -145,7 +165,7 @@ function AppContent() {
         <main className="relative overflow-hidden px-6 py-8 md:px-8 lg:px-6 xl:px-8">
           <div className="pointer-events-none absolute -right-36 top-11 h-100 w-100 rounded-full bg-[#5DF8D8]/20 blur-3xl" />
           <div className="relative mx-auto max-w-[1220px]">
-            {user.role !== 'CONSULTANT' && currentTab === 'LIST' && (
+            {user.role !== 'CONSULTANT' && !isMaterialsStaff && currentTab === 'LIST' && (
               <SeminarListPage
                 onSelectSeminar={(id) => {
                   navigate({ tab: 'DETAIL', seminarId: id, seminarTypeId: null })
@@ -165,7 +185,7 @@ function AppContent() {
                 }}
               />
             )}
-            {user.role !== 'CONSULTANT' && currentTab === 'DETAIL' && selectedSeminarId !== null && (
+            {user.role !== 'CONSULTANT' && !isMaterialsStaff && currentTab === 'DETAIL' && selectedSeminarId !== null && (
               <SeminarDetailPage
                 seminarId={selectedSeminarId}
                 onBack={() => {
@@ -194,7 +214,7 @@ function AppContent() {
                   }}
                 />
               )}
-            {((currentTab === 'CREATE' && !canCreateSeminar) ||
+            {!isMaterialsStaff && ((currentTab === 'CREATE' && !canCreateSeminar) ||
               (currentTab === 'MY_TRAVEL' && user.role !== 'CONSULTANT') ||
               (currentTab === 'ALL_MATERIALS' && !canViewMaterialRequests) ||
               (currentTab === 'CREATE_USER' && !canCreateUsers) ||

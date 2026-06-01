@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/consultants")
@@ -44,6 +46,12 @@ public class ConsultantController {
         return ResponseEntity.ok(consultantService.getConsultantById(id));
     }
 
+    @GetMapping("/by-user/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ConsultantResponse> getConsultantByUserId(@PathVariable Long userId) {
+        return ResponseEntity.ok(consultantService.getConsultantByUserId(userId));
+    }
+
     @PutMapping("/me")
     @PreAuthorize("hasRole('CONSULTANT')")
     public ResponseEntity<ConsultantResponse> updateMyProfile(
@@ -57,5 +65,13 @@ public class ConsultantController {
             @PathVariable Long id,
             @Valid @RequestBody UpdateConsultantProfileRequest request) {
         return ResponseEntity.ok(consultantService.updateConsultant(id, request));
+    }
+
+    @PutMapping(value = "/{id}/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ConsultantResponse> updateConsultantAvatar(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(consultantService.updateConsultantAvatar(id, file));
     }
 }

@@ -45,6 +45,7 @@ public class SeminarClientImpl implements SeminarClient {
     @Transactional(readOnly = true)
     public void verifyCoordinator(Long seminarId) {
         Seminar seminar = seminarService.findEntity(seminarId);
+        seminarService.ensureOpenForCoordinatorWork(seminar);
         com.training.logistics.auth.model.User coordinator = seminar.getCoordinator();
         if (coordinator == null) {
             throw new com.training.logistics.common.exception.BadRequestException("This seminar has not been claimed by a coordinator yet");

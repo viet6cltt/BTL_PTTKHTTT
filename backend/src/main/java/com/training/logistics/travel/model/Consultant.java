@@ -51,4 +51,7 @@ public class Consultant {
 
     @Column(length = 100)
     private String country;
+
+    @Column(name = "avatar_url", length = 512)
+    private String avatarUrl;
 }

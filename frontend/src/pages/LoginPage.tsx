@@ -13,7 +13,7 @@ export function LoginPage() {
     { label: 'Booking Staff', email: 'booking1@training.com', role: 'BOOKING_STAFF', desc: 'Tạo seminar & phân công' },
     { label: 'Logistics Coordinator', email: 'coordinator@training.com', role: 'LOGISTICS_COORDINATOR', desc: 'Duyệt khách sạn, đặt vé xe, vật tư' },
     { label: 'Consultant', email: 'leminhtuan@gmail.com', role: 'CONSULTANT', desc: 'Chuyên gia xem lịch & ký duyệt' },
-    { label: 'Materials Staff', email: 'materials@training.com', role: 'MATERIALS_STAFF', desc: 'Đóng gói & vận chuyển tài liệu' },
+    { label: 'Materials Staff', email: 'materials@training.com', role: 'MATERIALS_STAFF', desc: 'Đóng gói & vận chuyển vật tư' },
     { label: 'System Admin', email: 'admin@training.com', role: 'ADMIN', desc: 'Quản trị hệ thống toàn quyền' },
   ]
 

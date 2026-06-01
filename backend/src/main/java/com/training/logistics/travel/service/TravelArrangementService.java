@@ -6,6 +6,8 @@ import com.training.logistics.travel.dto.TravelFacilityInfoResponse;
 import com.training.logistics.travel.dto.TravelItineraryResponse;
 import com.training.logistics.travel.dto.UpdateTravelArrangementRequest;
 import com.training.logistics.travel.dto.UpdateTravelArrangementStatusRequest;
+import com.training.logistics.seminar.model.Seminar;
+import com.training.logistics.seminar.model.TimeSlot;
 import com.training.logistics.travel.exception.ForbiddenTravelAccessException;
 import com.training.logistics.travel.exception.InvalidTravelArrangementException;
 import com.training.logistics.travel.exception.TravelArrangementNotFoundException;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -42,22 +45,22 @@ public class TravelArrangementService {
         if (request.getSeminarId() == null) {
             throw new InvalidTravelArrangementException("seminarId is required");
         }
-        verifySeminarCoordinator(request.getSeminarId());
+        Seminar seminar = verifySeminarCoordinator(request.getSeminarId());
         TravelArrangement arrangement = TravelArrangementMapper.toEntity(request);
-        validateArrangementData(arrangement);
+        validateArrangementData(arrangement, seminar);
         return TravelArrangementMapper.toResponse(travelArrangementRepository.save(arrangement));
     }
 
     @Transactional
     public TravelArrangementResponse updateTravelArrangement(Long travelArrangementId, UpdateTravelArrangementRequest request) {
         TravelArrangement arrangement = findArrangement(travelArrangementId);
-        verifySeminarCoordinator(arrangement.getSeminarId());
+        Seminar seminar = verifySeminarCoordinator(arrangement.getSeminarId());
         if (arrangement.getTravelArrangementStatus() == TravelArrangementStatus.CANCELLED) {
             throw new InvalidTravelArrangementException("Cancelled travel arrangements cannot be updated");
         }
 
         TravelArrangementMapper.updateEntityFromRequest(request, arrangement);
-        validateArrangementData(arrangement);
+        validateArrangementData(arrangement, seminar);
         return TravelArrangementMapper.toResponse(arrangement);
     }
 
@@ -192,7 +195,7 @@ public class TravelArrangementService {
                 .toList();
     }
 
-    private void validateArrangementData(TravelArrangement arrangement) {
+    private void validateArrangementData(TravelArrangement arrangement, Seminar seminar) {
         if (arrangement.getSeminarId() == null) {
             throw new InvalidTravelArrangementException("seminarId is required");
         }
@@ -217,9 +220,24 @@ public class TravelArrangementService {
         if (!arrangement.getArrivalTime().isAfter(arrangement.getDepartureTime())) {
             throw new InvalidTravelArrangementException("arrivalTime must be after departureTime");
         }
+        LocalDateTime seminarStartTime = seminarStartTime(seminar);
+        if (!arrangement.getArrivalTime().isBefore(seminarStartTime)) {
+            throw new InvalidTravelArrangementException("arrivalTime must be before seminar start time");
+        }
         if (arrangement.getCost() != null && arrangement.getCost().compareTo(BigDecimal.ZERO) < 0) {
             throw new InvalidTravelArrangementException("cost must not be negative");
         }
+    }
+
+    private LocalDateTime seminarStartTime(Seminar seminar) {
+        return seminar.getStartDate().atTime(startTimeOf(seminar.getExpectedTimeSlot()));
+    }
+
+    private LocalTime startTimeOf(TimeSlot expectedTimeSlot) {
+        if (expectedTimeSlot == TimeSlot.AFTERNOON) {
+            return LocalTime.of(13, 0);
+        }
+        return LocalTime.of(8, 0);
     }
 
     private void validateStatusTransition(TravelArrangement arrangement, TravelArrangementStatus newStatus) {
@@ -252,8 +270,9 @@ public class TravelArrangementService {
         throw new ForbiddenTravelAccessException("You cannot change this travel arrangement status");
     }
 
-    private void verifySeminarCoordinator(Long seminarId) {
-        com.training.logistics.seminar.model.Seminar seminar = seminarService.findEntity(seminarId);
+    private Seminar verifySeminarCoordinator(Long seminarId) {
+        Seminar seminar = seminarService.findEntity(seminarId);
+        seminarService.ensureOpenForCoordinatorWork(seminar);
         com.training.logistics.auth.model.User coordinator = seminar.getCoordinator();
         if (coordinator == null) {
             throw new com.training.logistics.common.exception.BadRequestException("This seminar has not been claimed by a coordinator yet");
@@ -262,6 +281,7 @@ public class TravelArrangementService {
         if (!coordinator.getUserId().equals(currentUserId)) {
             throw new com.training.logistics.common.exception.BadRequestException("Only the coordinator assigned to this seminar can perform this action");
         }
+        return seminar;
     }
 
     private Long getCurrentConsultantId() {

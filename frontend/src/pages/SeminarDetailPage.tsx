@@ -5,6 +5,7 @@ import {
   ChevronRight,
   FileSignature,
   FileText,
+  Lock,
   Mail,
   MapPin,
   Pencil,
@@ -25,8 +26,9 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { InfoCard } from '../components/info/InfoCard'
-import { api, SeminarResponse, SeminarReservationResponse, TravelArrangementResponse, MaterialRequestResponse, SeminarRequirementsPreviewResponse, FacilityResponse, AudioVisualEquipmentResponse, TravelItineraryResponse } from '../api'
+import { api, SeminarResponse, SeminarReservationResponse, TravelArrangementResponse, MaterialRequestResponse, SeminarRequirementsPreviewResponse, FacilityResponse, AudioVisualEquipmentResponse, TravelItineraryResponse, MaterialResponse, ConsultantResponse } from '../api'
 import { useAuth } from '../context/AuthContext'
+import { addNotification } from '../utils/notificationHelper'
 
 interface SeminarDetailPageProps {
   seminarId: number
@@ -40,9 +42,20 @@ type DraftRoom = {
   roomImage: File | null
 }
 
+type ExtraMaterialRow = {
+  materialId: string
+  requestedQuantity: string
+  notes: string
+}
+
+type DetailTab = 'INFO' | 'CONTRACT' | 'TRAVEL' | 'MATERIALS' | 'REPORT'
+
+const MAX_UPLOAD_FILE_SIZE_BYTES = 20 * 1024 * 1024
+const MAX_UPLOAD_FILE_SIZE_LABEL = '20MB'
+
 export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps) {
   const { user } = useAuth()
-  
+
   // Core Data States
   const [seminar, setSeminar] = useState<SeminarResponse | null>(null)
   const [reservation, setReservation] = useState<SeminarReservationResponse | null>(null)
@@ -52,12 +65,14 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   const [previewRequirements, setPreviewRequirements] = useState<SeminarRequirementsPreviewResponse | null>(null)
   const [facilities, setFacilities] = useState<FacilityResponse[]>([])
   const [avEquipmentOptions, setAvEquipmentOptions] = useState<AudioVisualEquipmentResponse[]>([])
+  const [materialOptions, setMaterialOptions] = useState<MaterialResponse[]>([])
 
   // UI Flow States
   const [isLoading, setIsLoading] = useState(true)
+  const [consultantInfo, setConsultantInfo] = useState<ConsultantResponse | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'INFO' | 'CONTRACT' | 'TRAVEL' | 'MATERIALS' | 'REPORT'>('INFO')
+  const [activeTab, setActiveTab] = useState<DetailTab>('INFO')
 
   // Modals & Sub-forms
   const [isAssigning, setIsAssigning] = useState(false)
@@ -110,16 +125,25 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   const [neededByDate, setNeededByDate] = useState('')
   const [materialNotes, setMaterialNotes] = useState('')
   const [materialsQuantities, setMaterialsQuantities] = useState<Record<number, number>>({})
+  const [extraMaterialRows, setExtraMaterialRows] = useState<ExtraMaterialRow[]>([])
 
   // Load all logistics data for this seminar
   async function loadAllLogisticsData() {
     try {
       setIsLoading(true)
       setErrorMsg(null)
-      
+
       const sem = await api.getSeminarById(seminarId)
       setSeminar(sem)
-      
+
+      // Load consultant info details
+      try {
+        const consultantData = await api.getConsultantById(sem.consultantId)
+        setConsultantInfo(consultantData)
+      } catch {
+        setConsultantInfo(null)
+      }
+
       // Load reservation details
       try {
         const res = await api.getReservationsBySeminar(seminarId)
@@ -156,7 +180,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
         try {
           const reqs = await api.getRequirementsPreview(seminarId)
           setPreviewRequirements(reqs)
-          
+
           // Seed initial quantities for materials creation form
           const initialQuants: Record<number, number> = {}
           reqs.materials.forEach((m) => {
@@ -169,6 +193,9 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
           const avOptions = await api.getAudioVisualEquipments()
           setAvEquipmentOptions(avOptions || [])
+
+          const mats = await api.getMaterials()
+          setMaterialOptions(mats || [])
         } catch {
           // Ignore background load failures
         }
@@ -278,6 +305,13 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
         costForEachEquipment: Number(row.costForEachEquipment) || 0,
       }))
 
+    const oversizedFile = [scannedFile, ...roomsToCreate.map((room) => room.roomImage)]
+      .find((file): file is File => Boolean(file && file.size > MAX_UPLOAD_FILE_SIZE_BYTES))
+    if (oversizedFile) {
+      setErrorMsg(`File "${oversizedFile.name}" vượt quá ${MAX_UPLOAD_FILE_SIZE_LABEL}. Vui lòng chọn file nhỏ hơn hoặc nén ảnh trước khi upload.`)
+      return
+    }
+
     try {
       setIsCompletingVenue(true)
       setErrorMsg(null)
@@ -322,12 +356,43 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
     }
   }
 
+  function handleRoomImageChange(index: number, file: File | null) {
+    if (file && file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+      setErrorMsg(`Ảnh phòng "${file.name}" vượt quá ${MAX_UPLOAD_FILE_SIZE_LABEL}. Vui lòng chọn file nhỏ hơn hoặc nén ảnh trước khi upload.`)
+      updateDraftRoom(index, 'roomImage', null, setDraftRooms)
+      return
+    }
+    setErrorMsg(null)
+    updateDraftRoom(index, 'roomImage', file, setDraftRooms)
+  }
+
+  function handleScannedFileChange(file: File | null) {
+    if (file && file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+      setErrorMsg(`File hợp đồng "${file.name}" vượt quá ${MAX_UPLOAD_FILE_SIZE_LABEL}. Vui lòng chọn file nhỏ hơn hoặc nén file trước khi upload.`)
+      setScannedFile(null)
+      return
+    }
+    setErrorMsg(null)
+    setScannedFile(file)
+  }
+
   async function handleAddTravelSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!seminar || !departureLocation || !arrivalLocation || !departureTime || !arrivalTime) {
       setErrorMsg('Vui lòng điền đầy đủ thông tin di chuyển bắt buộc.')
       return
     }
+
+    const seminarStartTime = getSeminarStartDateTimeInputValue(seminar)
+    if (arrivalTime <= departureTime) {
+      setErrorMsg('Giờ đến phải sau giờ khởi hành.')
+      return
+    }
+    if (arrivalTime >= seminarStartTime) {
+      setErrorMsg(`Giờ đến phải trước giờ bắt đầu seminar (${formatDateTimeInputValue(seminarStartTime)}).`)
+      return
+    }
+
     try {
       setErrorMsg(null)
       const payload = {
@@ -425,28 +490,72 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   async function handleCreateMaterialsSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!seminar || !neededByDate) {
-      setErrorMsg('Vui lòng nhập ngày cần bàn giao tài liệu học phần.')
+      setErrorMsg('Vui lòng nhập ngày cần bàn giao vật tư.')
+      return
+    }
+    const today = getTodayInputValue()
+    if (neededByDate < today) {
+      setErrorMsg(`Ngày cần bàn giao phải từ hôm nay trở đi (${formatDate(today)}).`)
+      return
+    }
+    if (neededByDate > seminar.startDate) {
+      setErrorMsg(`Ngày cần bàn giao không được sau ngày bắt đầu seminar (${formatDate(seminar.startDate)}).`)
       return
     }
     try {
       setErrorMsg(null)
+      const invalidExtraRow = extraMaterialRows.find(
+        (row) => !row.materialId || !row.requestedQuantity || Number(row.requestedQuantity) < 1,
+      )
+      if (invalidExtraRow) {
+        setErrorMsg('Vui lòng chọn vật tư bổ sung và nhập số lượng hợp lệ, hoặc xóa dòng chưa dùng.')
+        return
+      }
+      const extraItems = extraMaterialRows
+        .filter((row) => row.materialId && row.requestedQuantity)
+        .map((row) => ({
+          materialId: Number(row.materialId),
+          requestedQuantity: Number(row.requestedQuantity),
+          notes: row.notes || undefined,
+        }))
+      const duplicateExtraItem = extraItems.find((item, index) =>
+        extraItems.some((other, otherIndex) => otherIndex !== index && other.materialId === item.materialId),
+      )
+      if (duplicateExtraItem) {
+        setErrorMsg('Vật tư bổ sung đang bị chọn trùng. Vui lòng gộp số lượng vào một dòng.')
+        return
+      }
+      const duplicatedDefaultItem = extraItems.find((item) => materialsQuantities[item.materialId] !== undefined)
+      if (duplicatedDefaultItem) {
+        setErrorMsg('Vật tư bổ sung không được trùng với danh mục mặc định của seminar.')
+        return
+      }
+
       const items = Object.entries(materialsQuantities).map(([matId, qty]) => ({
         materialId: Number(matId),
         requestedQuantity: qty,
-      }))
+      })).concat(extraItems)
       await api.createMaterialRequest(seminar.id, {
         neededByDate,
         notes: materialNotes,
         items,
       })
-      setSuccessMsg('Tạo yêu cầu đóng gói vận chuyển tài liệu học tập thành công!')
+      setSuccessMsg('Tạo yêu cầu đóng gói vận chuyển vật tư thành công!')
       setIsCreatingMaterials(false)
       setNeededByDate('')
       setMaterialNotes('')
+      setExtraMaterialRows([])
       await loadAllLogisticsData()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Lỗi yêu cầu vật tư.')
+      const message = materialRequestErrorMessage(err.message)
+      setErrorMsg(message || 'Lỗi yêu cầu vật tư.')
     }
+  }
+
+  function beginCreateMaterialRequest() {
+    if (!seminar) return
+    setNeededByDate(defaultNeededByDate(seminar.startDate))
+    setIsCreatingMaterials(true)
   }
 
   async function handleUpdateShipment(requestId: number, nextStatus: 'PACKED' | 'SHIPPED') {
@@ -461,12 +570,22 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
   }
 
   async function handleConfirmDeliveredAtVenue(requestId: number) {
-    const note = prompt('Vui lòng nhập ghi chú kiểm kê tài liệu khi nhận tại địa điểm:')
+    const note = prompt('Vui lòng nhập ghi chú kiểm kê vật tư khi nhận tại địa điểm:')
     if (note === null) return // Canceled
     try {
       setErrorMsg(null)
-      await api.confirmDelivered(requestId, note || 'Vật tư đã nhận đầy đủ tại sảnh khách sạn.')
+      await api.confirmDelivered(requestId, note || 'Vật tư đã nhận đầy đủ tại địa điểm tổ chức.')
       setSuccessMsg('Xác nhận nhận vật tư tại địa điểm tổ chức seminar thành công!')
+      
+      // Dispatch notification back to MATERIALS_STAFF
+      addNotification({
+        title: 'Xác nhận nhận vật tư thành công',
+        body: `Điều phối viên đã xác nhận đã nhận vật tư của Seminar "${seminar?.seminarName || 'đào tạo'}" tại địa điểm tổ chức thành công!`,
+        type: 'material',
+        role: 'MATERIALS_STAFF',
+        link: { tab: 'ALL_MATERIALS' }
+      })
+      
       await loadAllLogisticsData()
     } catch (err: any) {
       setErrorMsg(err.message || 'Lỗi nhận vật tư.')
@@ -485,11 +604,65 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
   // Role permissions helpers
   const isCoordinatorRole = user?.role === 'LOGISTICS_COORDINATOR'
+  const isOverdueLocked = isSeminarOverdueLocked(seminar)
   const canAssignCoordinator = isCoordinatorRole
   const canManageSeminarLogistics =
-    isCoordinatorRole && seminar.coordinatorId === user.userId
+    isCoordinatorRole && seminar.coordinatorId === user.userId && !isOverdueLocked
   const isConsultant = user?.role === 'CONSULTANT'
   const isMaterialsStaff = user?.role === 'MATERIALS_STAFF'
+  const canAccessMaterialsTab = isMaterialsStaff || isCoordinatorRole
+  const isFacilityContractApproved = reservation?.contractStatus === 'APPROVED'
+  const activeTravelArrangements = travelList.filter((travel) => getTravelStatus(travel) !== 'CANCELLED')
+  const isTravelConfirmed = activeTravelArrangements.length > 0 &&
+    activeTravelArrangements.every((travel) => getTravelStatus(travel) === 'CONFIRMED')
+  const facilityContractRequiredReason = 'Cần duyệt hợp đồng địa điểm trước khi mở bước này.'
+  const travelRequiredReason = !isFacilityContractApproved
+    ? facilityContractRequiredReason
+    : 'Cần hoàn tất và xác nhận lịch trình di chuyển trước khi mở bước này.'
+  const tabAccess: Record<DetailTab, { enabled: boolean; reason?: string }> = {
+    INFO: { enabled: true },
+    CONTRACT: { enabled: true },
+    TRAVEL: {
+      enabled: isFacilityContractApproved,
+      reason: facilityContractRequiredReason,
+    },
+    MATERIALS: {
+      enabled: canAccessMaterialsTab && isFacilityContractApproved && isTravelConfirmed,
+      reason: canAccessMaterialsTab ? travelRequiredReason : 'Vai trò hiện tại không có quyền xem tab vật tư.',
+    },
+    REPORT: {
+      enabled: isFacilityContractApproved,
+      reason: facilityContractRequiredReason,
+    },
+  }
+  const activeTabAccess = tabAccess[activeTab]
+  const detailTabs: { id: DetailTab; label: string; icon: typeof FileText }[] = canAccessMaterialsTab
+    ? [
+      { id: 'INFO', label: 'Tổng quan', icon: FileText },
+      { id: 'CONTRACT', label: 'Địa điểm', icon: Building2 },
+      { id: 'TRAVEL', label: 'Di chuyển', icon: Plane },
+      { id: 'MATERIALS', label: 'Vật tư', icon: Package2 },
+      { id: 'REPORT', label: 'Tổng kết chi phí', icon: PieChart },
+    ]
+    : [
+      { id: 'INFO', label: 'Tổng quan', icon: FileText },
+      { id: 'CONTRACT', label: 'Địa điểm', icon: Building2 },
+      { id: 'TRAVEL', label: 'Di chuyển', icon: Plane },
+      { id: 'REPORT', label: 'Tổng kết chi phí', icon: PieChart },
+    ]
+  const seminarStartInputValue = getSeminarStartDateTimeInputValue(seminar)
+  const defaultMaterialIds = new Set(previewRequirements?.materials.map((material) => material.materialId) || [])
+  const selectedExtraMaterialIds = new Set(
+    extraMaterialRows.map((row) => Number(row.materialId)).filter((materialId) => Number.isFinite(materialId) && materialId > 0),
+  )
+  const extraMaterialOptionsForRow = (currentMaterialId: string) => {
+    const currentId = Number(currentMaterialId)
+    return materialOptions.filter(
+      (material) =>
+        !defaultMaterialIds.has(material.id) &&
+        (!selectedExtraMaterialIds.has(material.id) || material.id === currentId),
+    )
+  }
 
   const hasCoordinatorAssigned = seminar.coordinatorId !== null
   const facilityCost = reservation?.totalCost || 0
@@ -525,28 +698,28 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
     if (allConfirmed) {
       return { label: 'ĐÃ NHẬN TẠI SẢNH', className: 'text-teal-600' }
     }
-    
+
     const hasDeliveredNotConfirmed = materialsList.some(m => m.shipmentStatus === 'DELIVERED')
     if (hasDeliveredNotConfirmed) {
       return { label: 'CHỜ KÝ NHẬN', className: 'text-indigo-600' }
     }
-    
+
     const hasShipped = materialsList.some(m => m.shipmentStatus === 'SHIPPED')
     if (hasShipped) {
       return { label: 'ĐANG VẬN CHUYỂN', className: 'text-blue-500' }
     }
-    
+
     const hasPacked = materialsList.some(m => m.shipmentStatus === 'PACKED')
     if (hasPacked) {
       return { label: 'ĐÃ ĐÓNG GÓI', className: 'text-amber-500' }
     }
-    
+
     return { label: 'ĐÃ YÊU CẦU', className: 'text-slate-500' }
   }
 
   return (
     <div className="space-y-6">
-      
+
       {/* Back button & Title */}
       <div className="flex items-center gap-4">
         <button
@@ -564,8 +737,8 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
           </div>
           <div className="flex flex-wrap items-center gap-3 mt-1">
             <h1 className="text-2xl font-black text-[#0B3970]">{seminar.seminarName}</h1>
-            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black tracking-wide uppercase ${statusStyles[seminar.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-              {statusLabels[seminar.status] || seminar.status}
+            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black tracking-wide uppercase ${seminarStatusStyle(seminar)}`}>
+              {seminarStatusLabel(seminar)}
             </span>
           </div>
         </div>
@@ -585,16 +758,23 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
         </div>
       )}
 
+      {isOverdueLocked && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700 flex items-center gap-2">
+          <XCircle className="h-5 w-5 shrink-0" />
+          <span>Seminar đã quá ngày bắt đầu nhưng chưa hoàn tất hoặc hủy. </span>
+        </div>
+      )}
+
       {/* Coordinator Assignment alert for Booking Staff */}
       {!hasCoordinatorAssigned && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="text-left">
             <h3 className="text-sm font-black text-amber-800 uppercase tracking-wider">Chưa phân công Điều phối viên Hậu cần</h3>
             <p className="mt-1 text-xs text-amber-700 leading-5">
-              Học phần này chưa được gán cho nhân viên phụ trách thuê địa điểm khách sạn và lập lịch trình đưa đón chuyên gia.
+              Học phần này chưa được gán cho nhân viên phụ trách thuê facility và lập lịch trình đưa đón chuyên gia.
             </p>
           </div>
-          {canAssignCoordinator && (
+          {canAssignCoordinator && !isOverdueLocked && (
             <button
               type="button"
               disabled={isAssigning}
@@ -602,10 +782,10 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               className="flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-xs font-black text-white shadow-md shadow-amber-900/10 hover:bg-amber-700 transition shrink-0"
             >
               <UserCheck className="h-4.5 w-4.5" />
-              {isAssigning 
-                ? 'Đang thực hiện...' 
-                : user?.role === 'LOGISTICS_COORDINATOR' 
-                  ? 'Nhận nhiệm vụ phụ trách' 
+              {isAssigning
+                ? 'Đang thực hiện...'
+                : user?.role === 'LOGISTICS_COORDINATOR'
+                  ? 'Nhận nhiệm vụ phụ trách'
                   : 'Gán cho Hoàng Anh Đức (Coordinator)'}
             </button>
           )}
@@ -614,32 +794,27 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
       {/* Tab Selectors */}
       <div className="flex border-b border-slate-200 bg-white/40 p-1.5 rounded-xl border">
-        {(user?.role === 'MATERIALS_STAFF'
-          ? [
-              { id: 'INFO', label: 'Tổng quan', icon: FileText },
-              { id: 'CONTRACT', label: 'Địa điểm', icon: Building2 },
-              { id: 'TRAVEL', label: 'Di chuyển', icon: Plane },
-              { id: 'MATERIALS', label: 'Vật tư', icon: Package2 },
-              { id: 'REPORT', label: 'Tổng kết chi phí', icon: PieChart },
-            ]
-          : [
-              { id: 'INFO', label: 'Tổng quan', icon: FileText },
-              { id: 'CONTRACT', label: 'Địa điểm', icon: Building2 },
-              { id: 'TRAVEL', label: 'Di chuyển', icon: Plane },
-              { id: 'REPORT', label: 'Tổng kết chi phí', icon: PieChart },
-            ]
-        ).map((t) => {
+        {detailTabs.map((t) => {
           const Icon = t.icon
+          const access = tabAccess[t.id]
+          const isActive = activeTab === t.id
           return (
             <button
               key={t.id}
               type="button"
-              onClick={() => setActiveTab(t.id as any)}
+              disabled={!access.enabled}
+              title={access.enabled ? undefined : access.reason}
+              aria-disabled={!access.enabled}
+              onClick={() => {
+                if (access.enabled) setActiveTab(t.id)
+              }}
               className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-3 text-xs font-extrabold transition-all ${
-                activeTab === t.id
-                  ? 'bg-[#0B3970] text-white shadow-md shadow-blue-900/20'
-                  : 'text-slate-500 hover:bg-white/60 hover:text-[#0B3970]'
-              }`}
+                !access.enabled
+                  ? 'cursor-not-allowed text-slate-300 opacity-45 grayscale'
+                  : isActive
+                    ? 'bg-[#0B3970] text-white shadow-md shadow-blue-900/20'
+                    : 'text-slate-500 hover:bg-white/60 hover:text-[#0B3970]'
+                }`}
             >
               <Icon className="h-4.5 w-4.5" />
               <span className="hidden sm:inline">{t.label}</span>
@@ -649,12 +824,15 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
       </div>
 
       <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_360px]">
-        
+
         {/* Main Tab Panels */}
         <section className="space-y-6">
+          {!activeTabAccess.enabled && (
+            <LockedTabPanel reason={activeTabAccess.reason || 'Bước này chưa sẵn sàng để thao tác.'} />
+          )}
 
           {/* TAB 1: Core Info */}
-          {activeTab === 'INFO' && (
+          {activeTabAccess.enabled && activeTab === 'INFO' && (
             <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 space-y-6 text-left">
               <div className="flex items-center gap-2.5 text-[#0B3970] border-b border-slate-100 pb-4">
                 <Sparkles className="h-5.5 w-5.5 text-[#126CB0]" />
@@ -663,8 +841,8 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               <div className="grid gap-4 md:grid-cols-2">
                 <DetailField label="Tên Seminar chính thức" value={seminar.seminarName} wide />
                 <DetailField label="Trạng thái seminar" value={
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${statusStyles[seminar.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                    {statusLabels[seminar.status] || seminar.status}
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${seminarStatusStyle(seminar)}`}>
+                    {seminarStatusLabel(seminar)}
                   </span>
                 } />
                 <DetailField label="Phân loại học phần" value={seminar.seminarTypeName} />
@@ -680,7 +858,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
           )}
 
           {/* TAB 2: Contract Details */}
-          {activeTab === 'CONTRACT' && (
+          {activeTabAccess.enabled && activeTab === 'CONTRACT' && (
             <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 space-y-6 text-left">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-2.5 text-[#0B3970]">
@@ -688,13 +866,12 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                   <h2 className="text-base font-black">Thông tin thuê địa điểm tổ chức</h2>
                 </div>
                 {reservation?.contractStatus && (
-                  <span className={`rounded-sm border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
-                    reservation.contractStatus === 'APPROVED'
+                  <span className={`rounded-sm border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${reservation.contractStatus === 'APPROVED'
                       ? 'bg-teal-50 border-teal-200 text-teal-700'
                       : reservation.contractStatus === 'REJECTED'
-                      ? 'bg-red-50 border-red-200 text-red-700'
-                      : 'bg-amber-50 border-amber-200 text-amber-700'
-                  }`}>
+                        ? 'bg-red-50 border-red-200 text-red-700'
+                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                    }`}>
                     {reservation.contractStatus === 'APPROVED' ? 'Đã ký duyệt' : reservation.contractStatus === 'REJECTED' ? 'Bị từ chối' : 'Đang thương lượng'}
                   </span>
                 )}
@@ -704,7 +881,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                 <div className="space-y-4">
                   <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
                     <p className="text-xs font-bold text-amber-800">
-                      ⚠️ Seminar này chưa được ký kết địa điểm tổ chức (Khách sạn/Hội trường).
+                      ⚠️ Seminar này chưa được ký kết facility tổ chức.
                     </p>
                   </div>
                   {canManageSeminarLogistics && (
@@ -738,7 +915,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                           </div>
 
                           <div className="grid gap-4 md:grid-cols-2">
-                            <FacilityInput label="Tên địa điểm *" value={facilityName} onChange={setFacilityName} placeholder="VD: Khách sạn Sunlight Convention" />
+                            <FacilityInput label="Tên facility *" value={facilityName} onChange={setFacilityName} placeholder="VD: Sunlight Convention Center" />
                             <FacilityInput label="Thành phố *" value={facilityCity} onChange={setFacilityCity} placeholder="VD: Hà Nội" />
                             <div className="md:col-span-2">
                               <FacilityInput label="Địa chỉ *" value={facilityAddress} onChange={setFacilityAddress} placeholder="VD: 12 Nguyễn Văn Cừ, Long Biên" />
@@ -748,7 +925,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                             <FacilityInput label="Chi phí/ngày (VNĐ)" type="number" value={facilityDailyCost} onChange={setFacilityDailyCost} placeholder="VD: 4500000" />
                             <FacilityInput label="Tên sales phụ trách" value={facilitySalesName} onChange={setFacilitySalesName} placeholder="VD: Nguyễn Minh Anh" />
                             <FacilityInput label="SĐT sales" value={facilitySalesPhone} onChange={setFacilitySalesPhone} placeholder="VD: 0901234567" />
-                            <FacilityInput label="Email sales" type="email" value={facilitySalesEmail} onChange={setFacilitySalesEmail} placeholder="sales@hotel.vn" />
+                            <FacilityInput label="Email sales" type="email" value={facilitySalesEmail} onChange={setFacilitySalesEmail} placeholder="sales@facility.vn" />
                           </div>
 
                           <div className="flex flex-wrap justify-end gap-3 pt-2">
@@ -807,7 +984,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
               ) : (
                 <div className="space-y-6">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <DetailField label="Tên Khách sạn" value={reservation.facilityName} />
+                    <DetailField label="Tên facility" value={reservation.facilityName} />
                     <DetailField label="Địa chỉ" value={reservation.facilityAddress} />
                     <DetailField label="Tổng chi phí thuê tạm tính" value={reservation.totalCost ? `${reservation.totalCost.toLocaleString('vi-VN')} VNĐ` : 'Chưa chốt chi phí'} />
                     <DetailField label="File scan hợp đồng" value={
@@ -942,13 +1119,16 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                                 <FacilityInput label="Số ghế *" type="number" value={room.numSeats} onChange={(value) => updateDraftRoom(index, 'numSeats', value, setDraftRooms)} placeholder={`Tối thiểu ${seminar.anticipatedRegistrants}`} />
                                 <label className="flex flex-col gap-1.5 text-xs">
                                   <span className="font-extrabold text-slate-600">Ảnh phòng họp</span>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => updateDraftRoom(index, 'roomImage', e.target.files?.[0] || null, setDraftRooms)}
-                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden"
-                                  />
-                                </label>
+	                                  <input
+	                                    type="file"
+	                                    accept="image/*"
+	                                    onChange={(e) => handleRoomImageChange(index, e.target.files?.[0] || null)}
+	                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden"
+	                                  />
+                                    <span className="text-[10px] font-semibold text-slate-400">
+                                      Tối đa {MAX_UPLOAD_FILE_SIZE_LABEL}.
+                                    </span>
+	                                </label>
                               </div>
                               {draftRooms.length > 1 && (
                                 <div className="mt-3 flex justify-end">
@@ -1020,13 +1200,17 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                           <div className="grid gap-4 sm:grid-cols-2 text-xs">
                             <label className="flex flex-col gap-1.5">
                               <span className="font-extrabold text-slate-600">File quét hợp đồng (PDF/Image) *</span>
-                              <input
-                                type="file"
-                                required
-                                onChange={(e) => setScannedFile(e.target.files?.[0] || null)}
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-hidden"
-                              />
-                            </label>
+	                              <input
+	                                type="file"
+                                  accept=".pdf,image/*"
+	                                required
+	                                onChange={(e) => handleScannedFileChange(e.target.files?.[0] || null)}
+	                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-hidden"
+	                              />
+                                <span className="text-[10px] font-semibold text-slate-400">
+                                  Tối đa {MAX_UPLOAD_FILE_SIZE_LABEL}.
+                                </span>
+	                            </label>
                             <FacilityInput label="Tổng giá trị hợp đồng thực tế (VNĐ) *" type="number" value={finalCost} onChange={setFinalCost} placeholder="Ví dụ: 12000000" />
                           </div>
                           <FacilityInput label="Ghi chú điều khoản" value={contractNotes} onChange={setContractNotes} placeholder="Thương lượng giảm 10% tiệc trà..." />
@@ -1052,7 +1236,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
           )}
 
           {/* TAB 3: Travel Schedules */}
-          {activeTab === 'TRAVEL' && (
+          {activeTabAccess.enabled && activeTab === 'TRAVEL' && (
             <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 space-y-6 text-left">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-2.5 text-[#0B3970]">
@@ -1129,7 +1313,18 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
                   <div className="grid gap-4 sm:grid-cols-2 text-xs">
                     <TravelTextInput label="Thời gian khởi hành *" type="datetime-local" value={departureTime} onChange={setDepartureTime} placeholder="" required />
-                    <TravelTextInput label="Thời gian đến nơi *" type="datetime-local" value={arrivalTime} onChange={setArrivalTime} placeholder="" required />
+                    <TravelTextInput
+                      label="Thời gian đến nơi *"
+                      type="datetime-local"
+                      value={arrivalTime}
+                      onChange={setArrivalTime}
+                      placeholder=""
+                      max={seminarStartInputValue}
+                      required
+                    />
+                    <p className="sm:col-span-2 text-[11px] font-bold text-slate-500">
+                      Giờ đến phải trước giờ bắt đầu seminar: {formatDateTimeInputValue(seminarStartInputValue)}.
+                    </p>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-3 text-xs">
@@ -1249,7 +1444,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
           )}
 
           {/* TAB 4: Material Deliveries */}
-          {activeTab === 'MATERIALS' && user?.role === 'MATERIALS_STAFF' && (
+          {activeTabAccess.enabled && activeTab === 'MATERIALS' && canAccessMaterialsTab && (
             <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 space-y-6 text-left">
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-2.5 text-[#0B3970]">
@@ -1266,7 +1461,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                       {!isCreatingMaterials ? (
                         <button
                           type="button"
-                          onClick={() => setIsCreatingMaterials(true)}
+                          onClick={beginCreateMaterialRequest}
                           className="inline-flex items-center gap-2 rounded-xl bg-[#0B3970] px-5 py-3 text-xs font-black text-white hover:bg-[#126CB0] transition"
                         >
                           <PlusCircle className="h-4 w-4" />
@@ -1274,30 +1469,41 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                         </button>
                       ) : (
                         <form onSubmit={handleCreateMaterialsSubmit} className="border p-5 rounded-xl bg-slate-50/50 space-y-5 text-left">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-[#0B3970]">Kế hoạch cung ứng sách vở đào tạo</h4>
-                          
+                          <h4 className="text-xs font-black uppercase tracking-wider text-[#0B3970]">Kế hoạch cung ứng vật tư</h4>
+
                           <div className="grid gap-4 sm:grid-cols-2 text-xs">
                             <div className="flex flex-col gap-1.5">
                               <label className="font-bold text-slate-600">Ngày cần bàn giao *</label>
                               <input
                                 type="date"
                                 required
+                                min={getTodayInputValue()}
+                                max={seminar.startDate}
                                 value={neededByDate}
                                 onChange={(e) => setNeededByDate(e.target.value)}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-hidden"
                               />
+                              <p className="text-[10px] font-semibold text-slate-400">
+                                Từ ngày lập yêu cầu đến chậm nhất {formatDate(seminar.startDate)}.
+                              </p>
                             </div>
                             <div className="flex flex-col gap-1.5">
                               <label className="font-bold text-slate-600">Ghi chú giao hàng</label>
                               <input
                                 type="text"
-                                placeholder="Gửi sảnh lễ tân trước 15:00..."
+                                placeholder="Gửi tới quầy tiếp nhận trước 15:00..."
                                 value={materialNotes}
                                 onChange={(e) => setMaterialNotes(e.target.value)}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-hidden"
                               />
                             </div>
                           </div>
+
+                          {!hasMaterialLeadTime(seminar.startDate) && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
+                              Seminar này còn dưới 14 ngày nữa bắt đầu. Hệ thống vẫn cho tạo yêu cầu, nhưng cần xử lý gấp để kịp chuẩn bị và giao vật tư.
+                            </div>
+                          )}
 
                           <div className="border-t border-slate-200 pt-3 space-y-3">
                             <p className="text-xs font-black text-[#0B3970] uppercase tracking-wider">Danh mục vật tư tính toán theo định mức quy định</p>
@@ -1322,6 +1528,91 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                                 </div>
                               ))}
                             </div>
+                          </div>
+
+                          <div className="border-t border-slate-200 pt-3 space-y-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <p className="text-xs font-black text-[#0B3970] uppercase tracking-wider">
+                                  Vật tư bổ sung thủ công
+                                </p>
+                                <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                                  Dùng cho các vật tư ngoài định mức mặc định của loại seminar này.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExtraMaterialRows((current) => [
+                                    ...current,
+                                    { materialId: '', requestedQuantity: '1', notes: '' },
+                                  ])
+                                }
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#0B3970] bg-white px-3 py-2 text-xs font-black text-[#0B3970] transition hover:bg-[#0B3970] hover:text-white"
+                              >
+                                <PlusCircle className="h-4 w-4" />
+                                Thêm vật tư
+                              </button>
+                            </div>
+
+                            {extraMaterialRows.length > 0 ? (
+                              <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                                {extraMaterialRows.map((row, index) => (
+                                  <div
+                                    key={index}
+                                    className="grid gap-3 rounded-lg border border-slate-100 bg-slate-50/60 p-3 md:grid-cols-[minmax(0,1.5fr)_110px_minmax(0,1fr)_40px]"
+                                  >
+                                    <label className="flex flex-col gap-1.5 text-xs">
+                                      <span className="font-extrabold text-slate-600">Vật tư</span>
+                                      <select
+                                        value={row.materialId}
+                                        onChange={(e) => updateExtraMaterialRow(index, 'materialId', e.target.value, setExtraMaterialRows)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden"
+                                      >
+                                        <option value="">Chọn vật tư ngoài định mức...</option>
+                                        {extraMaterialOptionsForRow(row.materialId).map((material) => (
+                                          <option key={material.id} value={material.id}>
+                                            {material.materialName} ({material.unit})
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="flex flex-col gap-1.5 text-xs">
+                                      <span className="font-extrabold text-slate-600">Số lượng</span>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        value={row.requestedQuantity}
+                                        onChange={(e) => updateExtraMaterialRow(index, 'requestedQuantity', e.target.value, setExtraMaterialRows)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden"
+                                      />
+                                    </label>
+                                    <label className="flex flex-col gap-1.5 text-xs">
+                                      <span className="font-extrabold text-slate-600">Ghi chú</span>
+                                      <input
+                                        type="text"
+                                        value={row.notes}
+                                        onChange={(e) => updateExtraMaterialRow(index, 'notes', e.target.value, setExtraMaterialRows)}
+                                        placeholder="VD: phát thêm cho khách mời"
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-hidden"
+                                      />
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => setExtraMaterialRows((current) => current.filter((_, rowIndex) => rowIndex !== index))}
+                                      className="mt-5 grid h-10 w-10 place-items-center rounded-lg text-red-500 transition hover:bg-red-50"
+                                      title="Xóa vật tư bổ sung"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-center text-xs font-bold text-slate-400">
+                                Chưa có vật tư bổ sung ngoài định mức.
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex justify-end gap-3 pt-2">
@@ -1358,7 +1649,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                       REQUESTED: 'Đã lập yêu cầu',
                       PACKED: 'Đã đóng gói hoàn tất',
                       SHIPPED: 'Đang vận chuyển (On Transit)',
-                      DELIVERED: 'Đã giao tới Khách sạn',
+                      DELIVERED: 'Đã giao tới facility',
                     }
 
                     return (
@@ -1393,8 +1684,8 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                           <p className="font-extrabold text-[#0B3970] text-[10px] uppercase">Chi tiết danh mục đóng gói</p>
                           <div className="space-y-1 bg-white p-3 rounded-lg border">
                             {m.items && m.items.map((item, id) => (
-                              <div key={id} className="flex justify-between py-1 border-b last:border-0">
-                                <span className="font-semibold text-slate-600">{item.materialName}</span>
+                              <div key={id} className="flex justify-between py-1 border-b last:border-0 font-semibold">
+                                <span className="text-slate-600">{item.materialName}</span>
                                 <span className="font-black text-[#0B3970]">{item.requestedQuantity} quyển/bộ</span>
                               </div>
                             ))}
@@ -1404,7 +1695,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                         {/* Delivery note */}
                         {m.deliveredConfirmedAt && (
                           <div className="rounded-lg bg-teal-50 border border-teal-100 p-3 mt-2 text-teal-800 font-bold">
-                            <p className="text-[10px] text-teal-600 font-extrabold uppercase">Bàn giao & Ký nhận tại khách sạn</p>
+                            <p className="text-[10px] text-teal-600 font-extrabold uppercase">Bàn giao & Ký nhận tại facility</p>
                             <p className="mt-0.5">Lúc: {new Date(m.deliveredConfirmedAt).toLocaleString('vi-VN')}</p>
                             <p className="mt-1 text-[11px] text-slate-500 leading-4">Ghi chú thủ kho: {m.deliveryConfirmationNote}</p>
                           </div>
@@ -1431,11 +1722,16 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                                 Bàn giao đơn vị vận chuyển (SHIPPED)
                               </button>
                             )}
+                            {m.shipmentStatus === 'SHIPPED' && (
+                              <span className="rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[11px] font-black text-indigo-700">
+                                Chờ điều phối viên xác nhận nhận hàng
+                              </span>
+                            )}
                           </div>
                         )}
 
                         {/* Coordinator receipt verification */}
-                        {isCoordinatorRole && seminar.coordinatorId === user.userId && m.shipmentStatus === 'SHIPPED' && !m.deliveredConfirmedAt && (
+                        {isCoordinatorRole && seminar.coordinatorId === user.userId && (m.shipmentStatus === 'SHIPPED' || m.shipmentStatus === 'DELIVERED') && !m.deliveredConfirmedAt && (
                           <div className="border-t border-slate-100 pt-3 flex justify-end">
                             <button
                               type="button"
@@ -1448,6 +1744,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                           </div>
                         )}
 
+
                       </div>
                     )
                   })}
@@ -1456,7 +1753,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
             </div>
           )}
 
-          {activeTab === 'REPORT' && (
+          {activeTabAccess.enabled && activeTab === 'REPORT' && (
             <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70 space-y-6 text-left">
               <div className="flex items-center gap-2.5 text-[#0B3970] border-b border-slate-100 pb-4">
                 <PieChart className="h-5.5 w-5.5 text-[#126CB0]" />
@@ -1505,33 +1802,49 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
 
         {/* Right Column: Auxiliary Consultant Profile & Actions */}
         <aside className="space-y-6">
-          
+
           {/* Consultant Info Card */}
           <InfoCard
             title="Chuyên gia đào tạo"
             icon={<UserRound className="h-6 w-6 text-[#156DB2]" />}
           >
             <div className="flex gap-4 text-left">
-              <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#B9FFF1] text-[#257AB7]">
-                <User className="h-10 w-10 fill-[#257AB7]/20 stroke-[#257AB7]" />
+              <div className="relative h-14 w-14 shrink-0 rounded-full overflow-hidden border border-[#38D9CD] bg-[#B9FFF1] text-[#257AB7]">
+                {consultantInfo?.avatarUrl ? (
+                  <img
+                    src={`http://localhost:8080/api/v1/facility-contracts/view-file?path=${encodeURIComponent(consultantInfo.avatarUrl)}`}
+                    alt="Avatar"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="grid h-full w-full place-items-center">
+                    <User className="h-10 w-10 fill-[#257AB7]/20 stroke-[#257AB7]" />
+                  </div>
+                )}
               </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-extrabold text-[#18395F] truncate">{seminar.consultantFullName}</h3>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-extrabold text-[#18395F] truncate">
+                  {consultantInfo?.fullName || seminar.consultantFullName}
+                </h3>
                 <span className="mt-2 inline-flex rounded-full bg-[#B9FFF1] px-3 py-1 text-[10px] font-extrabold text-[#009C8E]">
-                  Specialist Consultant
+                  {consultantInfo?.specialty || 'Chuyên gia giảng dạy'}
                 </span>
                 <div className="mt-4 space-y-2.5 text-xs text-slate-500">
                   <p className="flex items-center gap-2">
-                    <Phone className="h-3.5 w-3.5" />
-                    0903 222 111
+                    <Phone className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{consultantInfo?.phone || 'Chưa cập nhật'}</span>
                   </p>
                   <p className="flex items-center gap-2">
-                    <Mail className="h-3.5 w-3.5" />
-                    <span className="truncate">{seminar.consultantFullName.toLowerCase().replace(/\s+/g, '')}@gmail.com</span>
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{consultantInfo?.email || 'Chưa cập nhật'}</span>
                   </p>
                   <p className="flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5" />
-                    {seminar.city}, Việt Nam
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                      {consultantInfo
+                        ? `${consultantInfo.address ? `${consultantInfo.address}, ` : ''}${consultantInfo.city || seminar.city}, ${consultantInfo.country || 'Việt Nam'}`
+                        : `${seminar.city}, Việt Nam`}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -1547,22 +1860,21 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
             <div className="space-y-3.5 text-xs text-slate-600 text-left leading-5">
               <div className="flex justify-between items-center">
                 <span>Hợp đồng địa điểm:</span>
-                <span className={`font-black uppercase text-[10px] ${
-                  reservation?.contractStatus === 'APPROVED' 
-                    ? 'text-teal-600' 
+                <span className={`font-black uppercase text-[10px] ${reservation?.contractStatus === 'APPROVED'
+                    ? 'text-teal-600'
                     : reservation?.contractStatus === 'REJECTED'
-                    ? 'text-red-500'
-                    : reservation?.contractStatus === 'PENDING_NEGOTIATE'
-                    ? 'text-amber-500'
-                    : 'text-slate-400'
-                }`}>
-                  {reservation?.contractStatus === 'APPROVED' 
-                    ? 'ĐÃ DUYỆT' 
+                      ? 'text-red-500'
+                      : reservation?.contractStatus === 'PENDING_NEGOTIATE'
+                        ? 'text-amber-500'
+                        : 'text-slate-400'
+                  }`}>
+                  {reservation?.contractStatus === 'APPROVED'
+                    ? 'ĐÃ DUYỆT'
                     : reservation?.contractStatus === 'REJECTED'
-                    ? 'BỊ TỪ CHỐI'
-                    : reservation?.contractStatus === 'PENDING_NEGOTIATE'
-                    ? 'ĐANG THƯƠNG LƯỢNG'
-                    : 'CHƯA BẮT ĐẦU'}
+                      ? 'BỊ TỪ CHỐI'
+                      : reservation?.contractStatus === 'PENDING_NEGOTIATE'
+                        ? 'ĐANG THƯƠNG LƯỢNG'
+                        : 'CHƯA BẮT ĐẦU'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -1603,6 +1915,22 @@ type DetailFieldProps = {
   wide?: boolean
 }
 
+function LockedTabPanel({ reason }: { reason: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-7 text-left shadow-xl shadow-slate-200/70">
+      <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-slate-50 p-5 text-slate-500">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-slate-400 shadow-sm">
+          <Lock className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-base font-black text-slate-700">Bước này chưa thể thao tác</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{reason}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DetailField({ label, value, wide }: DetailFieldProps) {
   return (
     <div className={`rounded-xl border border-slate-200 bg-[#F8FBFF] px-4 py-3.5 ${wide ? 'md:col-span-2' : ''}`}>
@@ -1641,16 +1969,18 @@ type TravelTextInputProps = {
   onChange: (value: string) => void
   placeholder: string
   type?: string
+  max?: string
   required?: boolean
 }
 
-function TravelTextInput({ label, value, onChange, placeholder, type = 'text', required }: TravelTextInputProps) {
+function TravelTextInput({ label, value, onChange, placeholder, type = 'text', max, required }: TravelTextInputProps) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="font-bold text-slate-600">{label}</span>
       <input
         type={type}
         required={required}
+        max={max}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -1711,6 +2041,19 @@ function updateAvRow(
   )
 }
 
+function updateExtraMaterialRow(
+  index: number,
+  field: keyof ExtraMaterialRow,
+  value: string,
+  setExtraMaterialRows: React.Dispatch<React.SetStateAction<ExtraMaterialRow[]>>,
+) {
+  setExtraMaterialRows((current) =>
+    current.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, [field]: value } : row,
+    ),
+  )
+}
+
 function updateDraftRoom<K extends keyof DraftRoom>(
   index: number,
   field: K,
@@ -1759,6 +2102,17 @@ function toDateTimeInputValue(value: string) {
   return value.slice(0, 16)
 }
 
+function getSeminarStartDateTimeInputValue(seminar: SeminarResponse) {
+  const startTime = seminar.expectedTimeSlot === 'AFTERNOON' ? '13:00' : '08:00'
+  return `${seminar.startDate}T${startTime}`
+}
+
+function formatDateTimeInputValue(value: string) {
+  if (!value) return ''
+  const [date, time] = value.split('T')
+  return `${formatDate(date)} ${time}`
+}
+
 function facilityFileUrl(path?: string | null) {
   if (!path) return ''
   return `http://localhost:8080/api/v1/facility-contracts/view-file?path=${encodeURIComponent(path)}`
@@ -1774,12 +2128,83 @@ function formatDate(isoDate: string) {
   return `${day}/${month}/${year}`
 }
 
+function getTodayInputValue() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function defaultNeededByDate(seminarStartDate: string) {
+  const oneDayBefore = addDaysInputValue(seminarStartDate, -1)
+  const today = getTodayInputValue()
+
+  if (oneDayBefore >= today) {
+    return oneDayBefore
+  }
+  if (seminarStartDate >= today) {
+    return seminarStartDate
+  }
+  return ''
+}
+
+function hasMaterialLeadTime(seminarStartDate: string) {
+  return getTodayInputValue() <= addDaysInputValue(seminarStartDate, -14)
+}
+
+function addDaysInputValue(isoDate: string, days: number) {
+  const date = new Date(`${isoDate}T00:00:00`)
+  date.setDate(date.getDate() + days)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function materialRequestErrorMessage(message?: string) {
+  if (message === 'neededByDate must be on or after requestDate') {
+    return 'Ngày cần bàn giao phải bằng hoặc sau ngày lập yêu cầu.'
+  }
+  if (message === 'neededByDate must be on or before seminar startDate') {
+    return 'Ngày cần bàn giao không được sau ngày bắt đầu seminar.'
+  }
+  if (message === 'Seminar is overdue and no longer editable by coordinator') {
+    return 'Seminar đã quá hạn xử lý, coordinator không thể thao tác thêm.'
+  }
+  return message
+}
+
+function isSeminarOverdueLocked(seminar: SeminarResponse) {
+  return seminar.status === 'OVERDUE' ||
+    (seminar.startDate < getTodayInputValue() && !isClosedSeminarStatus(seminar.status))
+}
+
+function isClosedSeminarStatus(status: string) {
+  return status === 'READY_FOR_SEMINAR' || status === 'CANCELLED'
+}
+
+function seminarStatusLabel(seminar: SeminarResponse) {
+  if (isSeminarOverdueLocked(seminar)) {
+    return 'Quá hạn xử lý'
+  }
+  return statusLabels[seminar.status] || seminar.status
+}
+
+function seminarStatusStyle(seminar: SeminarResponse) {
+  if (isSeminarOverdueLocked(seminar)) {
+    return 'bg-rose-50 text-rose-700 border-rose-200'
+  }
+  return statusStyles[seminar.status] || 'bg-slate-100 text-slate-600 border-slate-200'
+}
+
 const statusLabels: Record<string, string> = {
   PENDING_LOGISTICS: 'Chờ Hậu Cần',
   FACILITY_SECURED: 'Đã Chốt Địa Điểm',
   TRAVEL_CONFIRMED: 'Đã Chốt Di Chuyển',
   READY_FOR_SEMINAR: 'Sẵn Sàng Tổ Chức',
   CANCELLED: 'Đã Hủy',
+  OVERDUE: 'Quá Hạn Xử Lý',
 }
 
 const statusStyles: Record<string, string> = {
@@ -1788,4 +2213,5 @@ const statusStyles: Record<string, string> = {
   TRAVEL_CONFIRMED: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   READY_FOR_SEMINAR: 'bg-teal-50 text-teal-700 border-teal-200',
   CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200',
+  OVERDUE: 'bg-rose-50 text-rose-700 border-rose-200',
 }

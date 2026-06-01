@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Clock3,
   Info,
-  MapPin,
   Navigation,
   Plane,
   RefreshCw,
@@ -19,6 +18,7 @@ import {
 import {
   api,
   ConsultantResponse,
+  SeminarResponse,
   TravelArrangementResponse,
   TravelArrangementStatus,
   TravelFacilityInfoResponse,
@@ -45,12 +45,14 @@ export function MyTravelPage() {
   const { user } = useAuth()
   const [itinerary, setItinerary] = useState<TravelItineraryResponse | null>(null)
   const [consultant, setConsultant] = useState<ConsultantResponse | null>(null)
+  const [seminarsById, setSeminarsById] = useState<Record<number, SeminarResponse>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdatingId, setIsUpdatingId] = useState<number | null>(null)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [showCompletedTrips, setShowCompletedTrips] = useState(false)
   const [profileForm, setProfileForm] = useState({
     travelPreference: '',
     address: '',
@@ -64,6 +66,23 @@ export function MyTravelPage() {
       setErrorMsg(null)
       const data = await api.getMyTravel()
       setItinerary(data)
+      const seminarIds = Array.from(
+        new Set([
+          ...(data.arrangements || []).map((arrangement: TravelArrangementResponse) => arrangement.seminarId),
+          ...(data.facilityReservations || []).map((facility: TravelFacilityInfoResponse) => facility.seminarId),
+        ]),
+      ).filter(Boolean)
+      const seminarEntries = await Promise.all(
+        seminarIds.map(async (seminarId: number) => {
+          try {
+            const seminar = await api.getSeminarById(seminarId)
+            return [seminarId, seminar] as const
+          } catch {
+            return null
+          }
+        }),
+      )
+      setSeminarsById(Object.fromEntries(seminarEntries.filter((entry): entry is readonly [number, SeminarResponse] => entry !== null)))
       if (data.consultantId) {
         const consultantData = await api.getConsultantById(data.consultantId)
         setConsultant(consultantData)
@@ -117,7 +136,39 @@ export function MyTravelPage() {
     [itinerary],
   )
 
-  const nextTrip = arrangements.find((arrangement) => getArrangementStatus(arrangement) !== 'CANCELLED')
+  const now = Date.now()
+  const pendingTrips = arrangements.filter((arrangement) => getArrangementStatus(arrangement) === 'BOOKED')
+  const upcomingTrips = arrangements.filter(
+    (arrangement) =>
+      getArrangementStatus(arrangement) === 'CONFIRMED' &&
+      new Date(arrangement.arrivalTime).getTime() >= now,
+  )
+  const completedTrips = arrangements.filter(
+    (arrangement) =>
+      getArrangementStatus(arrangement) === 'CANCELLED' ||
+      (getArrangementStatus(arrangement) === 'CONFIRMED' &&
+        new Date(arrangement.arrivalTime).getTime() < now),
+  )
+  const facilityBySeminarId = useMemo(
+    () =>
+      Object.fromEntries(
+        (itinerary?.facilityReservations || []).map((facility) => [facility.seminarId, facility]),
+      ),
+    [itinerary?.facilityReservations],
+  )
+  const seminarAssignments = useMemo(() => {
+    const ids = new Set<number>()
+    arrangements.forEach((arrangement) => ids.add(arrangement.seminarId))
+    itinerary?.facilityReservations?.forEach((facility) => ids.add(facility.seminarId))
+    return Array.from(ids).map((seminarId) => ({
+      seminarId,
+      seminar: seminarsById[seminarId],
+      facility: facilityBySeminarId[seminarId],
+      trips: arrangements.filter((arrangement) => arrangement.seminarId === seminarId),
+    }))
+  }, [arrangements, facilityBySeminarId, itinerary?.facilityReservations, seminarsById])
+
+  const nextTrip = [...pendingTrips, ...upcomingTrips].find((arrangement) => getArrangementStatus(arrangement) !== 'CANCELLED')
   const confirmedCount = arrangements.filter((arrangement) => getArrangementStatus(arrangement) === 'CONFIRMED').length
 
   async function handleUpdateTicketStatus(arrangementId: number, status: 'CONFIRMED' | 'CANCELLED') {
@@ -208,18 +259,20 @@ export function MyTravelPage() {
             <main className="space-y-6">
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
                 <SectionTitle
-                  icon={<Plane className="h-5 w-5 text-blue-600" />}
-                  title="Các chặng di chuyển"
-                  subtitle="Xác nhận từng chặng sau khi bạn đã kiểm tra đúng thông tin vé"
+                  icon={<Clock3 className="h-5 w-5 text-amber-600" />}
+                  title="Chuyến đi đang chờ xác nhận"
+                  subtitle="Kiểm tra thông tin vé, seminar và địa điểm trước khi xác nhận"
                 />
 
                 <div className="mt-5 space-y-4">
-                  {arrangements.length > 0 ? (
-                    arrangements.map((arrangement, index) => (
+                  {pendingTrips.length > 0 ? (
+                    pendingTrips.map((arrangement, index) => (
                       <TravelLeg
                         key={arrangement.travelArrangementId}
                         arrangement={arrangement}
                         index={index}
+                        seminar={seminarsById[arrangement.seminarId]}
+                        facility={facilityBySeminarId[arrangement.seminarId]}
                         isUpdating={isUpdatingId === arrangement.travelArrangementId}
                         onConfirm={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CONFIRMED')}
                         onCancel={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CANCELLED')}
@@ -227,7 +280,7 @@ export function MyTravelPage() {
                     ))
                   ) : (
                     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500">
-                      Chưa có chặng xe, tàu hoặc máy bay nào được cấp phát.
+                      Không có chuyến nào đang chờ bạn xác nhận.
                     </div>
                   )}
                 </div>
@@ -235,18 +288,95 @@ export function MyTravelPage() {
 
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
                 <SectionTitle
-                  icon={<Building2 className="h-5 w-5 text-indigo-600" />}
-                  title="Nơi lưu trú & phòng đã giữ chỗ"
-                  subtitle="Thông tin được lấy từ hợp đồng cơ sở vật chất của seminar"
+                  icon={<TicketCheck className="h-5 w-5 text-teal-600" />}
+                  title="Upcoming đã xác nhận"
+                  subtitle="Các chuyến sắp tới đã được bạn xác nhận với phòng hậu cần"
                 />
-                <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                  {itinerary.facilityReservations?.length > 0 ? (
-                    itinerary.facilityReservations.map((facility) => (
-                      <FacilityBlock key={`${facility.seminarId}-${facility.facilityName}`} facility={facility} />
+
+                <div className="mt-5 space-y-4">
+                  {upcomingTrips.length > 0 ? (
+                    upcomingTrips.map((arrangement, index) => (
+                      <TravelLeg
+                        key={arrangement.travelArrangementId}
+                        arrangement={arrangement}
+                        index={index}
+                        seminar={seminarsById[arrangement.seminarId]}
+                        facility={facilityBySeminarId[arrangement.seminarId]}
+                        isUpdating={isUpdatingId === arrangement.travelArrangementId}
+                        onConfirm={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CONFIRMED')}
+                        onCancel={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CANCELLED')}
+                      />
                     ))
                   ) : (
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500 lg:col-span-2">
-                      Chưa có khách sạn hoặc phòng lưu trú được liên kết.
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500">
+                      Chưa có chuyến upcoming nào đã xác nhận.
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
+                <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                  <SectionTitle
+                    icon={<CheckCircle2 className="h-5 w-5 text-slate-500" />}
+                    title="Chuyến đã hoàn thiện"
+                    subtitle="Ẩn mặc định để màn hình tập trung vào việc cần xử lý"
+                    borderless
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCompletedTrips((current) => !current)}
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-[#0B3970] transition hover:border-[#5DF8D8]"
+                  >
+                    {showCompletedTrips ? 'Ẩn lịch sử' : `Hiện ${completedTrips.length} chuyến`}
+                  </button>
+                </div>
+
+                {showCompletedTrips && (
+                  <div className="mt-5 space-y-4">
+                    {completedTrips.length > 0 ? (
+                      completedTrips.map((arrangement, index) => (
+                        <TravelLeg
+                          key={arrangement.travelArrangementId}
+                          arrangement={arrangement}
+                          index={index}
+                          seminar={seminarsById[arrangement.seminarId]}
+                          facility={facilityBySeminarId[arrangement.seminarId]}
+                          isUpdating={isUpdatingId === arrangement.travelArrangementId}
+                          onConfirm={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CONFIRMED')}
+                          onCancel={() => handleUpdateTicketStatus(arrangement.travelArrangementId, 'CANCELLED')}
+                          compact
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500">
+                        Chưa có chuyến đã hoàn thiện.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
+                <SectionTitle
+                  icon={<Building2 className="h-5 w-5 text-indigo-600" />}
+                  title="Seminar & địa điểm tham gia"
+                  subtitle="Mỗi seminar gom đúng các chuyến đi và facility liên quan để dễ đối chiếu"
+                />
+                <div className="mt-5 grid gap-4">
+                  {seminarAssignments.length > 0 ? (
+                    seminarAssignments.map((assignment) => (
+                      <SeminarAssignmentCard
+                        key={assignment.seminarId}
+                        seminarId={assignment.seminarId}
+                        seminar={assignment.seminar}
+                        facility={assignment.facility}
+                        trips={assignment.trips}
+                      />
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500">
+                      Chưa có seminar hoặc facility nào được liên kết với tài khoản của bạn.
                     </div>
                   )}
                 </div>
@@ -256,8 +386,18 @@ export function MyTravelPage() {
             <aside className="space-y-6">
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
                 <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-full bg-[#B9FFF1] text-[#009C8E]">
-                    <User className="h-7 w-7" />
+                  <div className="block h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-[#38D9CD] bg-white shadow-md shadow-slate-200/80">
+                    {consultant?.avatarUrl ? (
+                      <img
+                        src={`http://localhost:8080/api/v1/facility-contracts/view-file?path=${encodeURIComponent(consultant.avatarUrl)}`}
+                        alt="Avatar"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center bg-[#B9FFF1] text-[#009C8E]">
+                        <User className="h-8 w-8" />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-[#0B3970]">{user?.fullName}</h3>
@@ -361,15 +501,21 @@ export function MyTravelPage() {
 function TravelLeg({
   arrangement,
   index,
+  seminar,
+  facility,
   isUpdating,
   onConfirm,
   onCancel,
+  compact = false,
 }: {
   arrangement: TravelArrangementResponse
   index: number
+  seminar?: SeminarResponse
+  facility?: TravelFacilityInfoResponse
   isUpdating: boolean
   onConfirm: () => void
   onCancel: () => void
+  compact?: boolean
 }) {
   const status = getArrangementStatus(arrangement)
   const statusClass = {
@@ -379,10 +525,12 @@ function TravelLeg({
   }[status]
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
+    <article className={`rounded-2xl border border-slate-200 bg-slate-50/40 ${compact ? 'p-4' : 'p-5'}`}>
       <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Chặng {index + 1}</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+            Chuyến {index + 1} • Seminar #{arrangement.seminarId}
+          </p>
           <h3 className="mt-1 text-base font-black text-[#0B3970]">
             {transportLabels[arrangement.transportMode] || arrangement.transportMode}
             {arrangement.carrierName ? ` - ${arrangement.carrierName}` : ''}
@@ -395,6 +543,20 @@ function TravelLeg({
           {status === 'CONFIRMED' ? <CheckCircle2 className="h-3.5 w-3.5" /> : status === 'CANCELLED' ? <XCircle className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
           {statusLabels[status]}
         </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 rounded-xl border border-blue-100 bg-white p-4 text-xs font-bold text-slate-500 md:grid-cols-2">
+        <InfoLine
+          label="Seminar tham gia"
+          value={seminar?.seminarName || `Seminar #${arrangement.seminarId}`}
+          strong
+        />
+        <InfoLine
+          label="Facility / địa điểm"
+          value={facility?.facilityName || 'Chưa có địa điểm liên kết'}
+        />
+        {seminar && <InfoLine label="Thời gian seminar" value={`${formatDate(seminar.startDate)} - ${formatDate(seminar.endDate)}`} />}
+        {facility && <InfoLine label="Địa chỉ facility" value={facility.facilityAddress} />}
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
@@ -412,7 +574,7 @@ function TravelLeg({
         />
       </div>
 
-      {status !== 'CANCELLED' && (
+      {status === 'BOOKED' && (
         <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
           <button
             type="button"
@@ -423,17 +585,15 @@ function TravelLeg({
             <XCircle className="h-4 w-4" />
             Hủy chặng
           </button>
-          {status === 'BOOKED' && (
-            <button
-              type="button"
-              onClick={onConfirm}
-              disabled={isUpdating}
-              className="flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-teal-600 disabled:cursor-wait disabled:bg-teal-300"
-            >
-              <TicketCheck className="h-4 w-4" />
-              {isUpdating ? 'Đang xác nhận...' : 'Xác nhận chặng này'}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isUpdating}
+            className="flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-teal-600 disabled:cursor-wait disabled:bg-teal-300"
+          >
+            <TicketCheck className="h-4 w-4" />
+            {isUpdating ? 'Đang xác nhận...' : 'Xác nhận chặng này'}
+          </button>
         </div>
       )}
     </article>
@@ -450,30 +610,67 @@ function TravelPoint({ label, location, time }: { label: string; location: strin
   )
 }
 
-function FacilityBlock({ facility }: { facility: TravelFacilityInfoResponse }) {
+function SeminarAssignmentCard({
+  seminarId,
+  seminar,
+  facility,
+  trips,
+}: {
+  seminarId: number
+  seminar?: SeminarResponse
+  facility?: TravelFacilityInfoResponse
+  trips: TravelArrangementResponse[]
+}) {
+  const pendingCount = trips.filter((trip) => getArrangementStatus(trip) === 'BOOKED').length
+  const confirmedCount = trips.filter((trip) => getArrangementStatus(trip) === 'CONFIRMED').length
+
   return (
     <article className="rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
-      <div className="flex gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700">
-          <MapPin className="h-6 w-6" />
-        </div>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
         <div>
-          <h3 className="text-sm font-black text-[#0B3970]">{facility.facilityName}</h3>
-          <p className="mt-1 text-xs font-bold leading-5 text-slate-500">{facility.facilityAddress}</p>
-        </div>
-      </div>
-      {facility.roomNameSpecs?.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Phòng đã giữ</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {facility.roomNameSpecs.map((room) => (
-              <span key={room} className="rounded-md border border-indigo-100 bg-white px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                {room}
-              </span>
-            ))}
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Seminar #{seminarId}</p>
+          <h3 className="mt-1 text-base font-black leading-6 text-[#0B3970]">
+            {seminar?.seminarName || 'Seminar chưa tải được thông tin'}
+          </h3>
+          <div className="mt-3 grid gap-3 text-xs font-bold text-slate-500 sm:grid-cols-3">
+            <InfoLine label="Thành phố" value={seminar?.city || 'N/A'} />
+            <InfoLine
+              label="Ngày tổ chức"
+              value={seminar ? `${formatDate(seminar.startDate)} - ${formatDate(seminar.endDate)}` : 'N/A'}
+            />
+            <InfoLine label="Số chuyến đi" value={`${trips.length} chuyến`} strong />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">
+              {pendingCount} chờ xác nhận
+            </span>
+            <span className="rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-black text-teal-700">
+              {confirmedCount} đã xác nhận
+            </span>
           </div>
         </div>
-      )}
+
+        <div className="rounded-xl border border-indigo-100 bg-white p-4">
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Facility liên quan</p>
+          {facility ? (
+            <>
+              <h4 className="mt-1 text-sm font-black text-[#0B3970]">{facility.facilityName}</h4>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-500">{facility.facilityAddress}</p>
+              {facility.roomNameSpecs?.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {facility.roomNameSpecs.map((room) => (
+                    <span key={room} className="rounded-md bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
+                      {room}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="mt-2 text-xs font-bold text-slate-400">Chưa có facility được liên kết.</p>
+          )}
+        </div>
+      </div>
     </article>
   )
 }
@@ -493,9 +690,19 @@ function SummaryTile({ icon, label, value, detail }: { icon: React.ReactNode; la
   )
 }
 
-function SectionTitle({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+function SectionTitle({
+  icon,
+  title,
+  subtitle,
+  borderless = false,
+}: {
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  borderless?: boolean
+}) {
   return (
-    <div className="flex items-start gap-2 border-b border-slate-100 pb-4">
+    <div className={`flex items-start gap-2 ${borderless ? '' : 'border-b border-slate-100 pb-4'}`}>
       {icon}
       <div>
         <h2 className="text-base font-black text-[#0B3970]">{title}</h2>
@@ -602,6 +809,12 @@ function formatShortDateTime(value: string) {
     day: '2-digit',
     month: '2-digit',
   })
+}
+
+function formatDate(value: string) {
+  if (!value) return 'N/A'
+  const [year, month, day] = value.split('-')
+  return `${day}/${month}/${year}`
 }
 
 function formatMoney(value: number | null) {

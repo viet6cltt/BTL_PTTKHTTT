@@ -40,7 +40,7 @@ export interface UserResponse {
   createdAt: string
 }
 
-export type SeminarStatus = 'PENDING_LOGISTICS' | 'FACILITY_SECURED' | 'TRAVEL_CONFIRMED' | 'READY_FOR_SEMINAR' | 'CANCELLED'
+export type SeminarStatus = 'PENDING_LOGISTICS' | 'FACILITY_SECURED' | 'TRAVEL_CONFIRMED' | 'READY_FOR_SEMINAR' | 'CANCELLED' | 'OVERDUE'
 
 export interface SeminarResponse {
   id: number
@@ -178,6 +178,7 @@ export interface ConsultantResponse {
   address: string | null
   city: string | null
   country: string | null
+  avatarUrl?: string | null
 }
 
 export interface UpdateMyConsultantProfileRequest {
@@ -353,6 +354,31 @@ export const api = {
       body: JSON.stringify({ email, password }),
     })
     return handleResponse<AuthResponse>(res)
+  },
+
+  async updateMyProfile(fullName: string, phone: string): Promise<UserResponse> {
+    const res = await fetch(`${API_BASE_URL}/users/me`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ fullName, phone }),
+    })
+    return handleResponse<UserResponse>(res)
+  },
+
+  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ oldPassword, newPassword }),
+    })
+    return handleResponse<void>(res)
+  },
+
+  async getMyProfile(): Promise<UserResponse> {
+    const res = await fetch(`${API_BASE_URL}/users/me`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<UserResponse>(res)
   },
 
   async createUser(data: CreateUserRequest): Promise<UserResponse> {
@@ -765,11 +791,34 @@ export const api = {
     return handleResponse<ConsultantResponse>(res)
   },
 
+  async getConsultantByUserId(userId: number): Promise<ConsultantResponse> {
+    const res = await fetch(`${API_BASE_URL}/consultants/by-user/${userId}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<ConsultantResponse>(res)
+  },
+
   async updateMyConsultantProfile(data: UpdateMyConsultantProfileRequest): Promise<ConsultantResponse> {
     const res = await fetch(`${API_BASE_URL}/consultants/me`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
+    })
+    return handleResponse<ConsultantResponse>(res)
+  },
+
+  async uploadConsultantAvatar(consultantId: number, file: File): Promise<ConsultantResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = localStorage.getItem('token')
+    const headers: HeadersInit = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    const res = await fetch(`${API_BASE_URL}/consultants/${consultantId}/avatar`, {
+      method: 'PUT',
+      headers,
+      body: formData,
     })
     return handleResponse<ConsultantResponse>(res)
   },

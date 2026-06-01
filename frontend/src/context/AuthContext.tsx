@@ -12,6 +12,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthResponse>
   logout: () => void
   isLoading: boolean
+  updateUserFullName: (fullName: string) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -53,8 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  function updateUserFullName(fullName: string) {
+    if (user) {
+      const updatedUser = { ...user, fullName }
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      setUser(updatedUser)
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading, updateUserFullName }}>
       {children}
     </AuthContext.Provider>
   )

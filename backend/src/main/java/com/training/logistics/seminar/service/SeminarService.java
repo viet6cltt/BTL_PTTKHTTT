@@ -45,6 +45,23 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional
 public class SeminarService {
+    private static final List<SeminarStatus> FINAL_SEMINAR_STATUSES = List.of(
+            SeminarStatus.PENDING_LOGISTICS,
+            SeminarStatus.FACILITY_SECURED,
+            SeminarStatus.TRAVEL_CONFIRMED,
+            SeminarStatus.READY_FOR_SEMINAR,
+            SeminarStatus.OVERDUE
+    );
+    private static final List<SeminarStatus> CLOSED_SEMINAR_STATUSES = List.of(
+            SeminarStatus.READY_FOR_SEMINAR,
+            SeminarStatus.CANCELLED
+    );
+    private static final List<SeminarStatus> OVERDUE_EXCLUDED_STATUSES = List.of(
+            SeminarStatus.READY_FOR_SEMINAR,
+            SeminarStatus.CANCELLED,
+            SeminarStatus.OVERDUE
+    );
+
     private final SeminarRepository seminarRepository;
     private final SeminarTypeRepository seminarTypeRepository;
     private final ConsultantRepository consultantRepository;
@@ -52,15 +69,18 @@ public class SeminarService {
     private final MaterialRequirementRepository materialRequirementRepository;
     private final AvEquipmentRequirementRepository avEquipmentRequirementRepository;
 
-    @Transactional(readOnly = true)
     public Page<SeminarResponse> search(SeminarStatus status, String city, Long coordinatorId, Pageable pageable) {
-        return seminarRepository.findAll(buildSpecification(status, city, coordinatorId), pageable)
+        UserRole currentRole = requireCurrentUser().getRole();
+        refreshOverdueSeminars();
+        return seminarRepository.findAll(buildSpecification(status, city, coordinatorId, currentRole), pageable)
                 .map(this::toResponse);
     }
 
-    @Transactional(readOnly = true)
     public SeminarResponse getById(Long id) {
-        return toResponse(findEntity(id));
+        refreshOverdueSeminars();
+        Seminar seminar = findEntity(id);
+        ensureVisibleForCurrentUser(seminar);
+        return toResponse(seminar);
     }
 
     public SeminarResponse create(SeminarCreateRequest request) {
@@ -113,6 +133,7 @@ public class SeminarService {
 
     public SeminarResponse assignCoordinator(Long id, AssignCoordinatorRequest request) {
         Seminar seminar = findEntity(id);
+        ensureOpenForCoordinatorWork(seminar);
         User currentUser = requireCurrentUser();
         if (currentUser.getRole() != UserRole.LOGISTICS_COORDINATOR) {
             throw new BadRequestException("Only a LOGISTICS_COORDINATOR can claim a seminar");
@@ -151,6 +172,21 @@ public class SeminarService {
                 .orElseThrow(() -> new ResourceNotFoundException("Seminar not found: " + id));
     }
 
+    public void ensureOpenForCoordinatorWork(Seminar seminar) {
+        if (seminar.getStatus() == SeminarStatus.OVERDUE || isPastUnclosed(seminar)) {
+            throw new BadRequestException("Seminar is overdue and no longer editable by coordinator");
+        }
+    }
+
+    private boolean isPastUnclosed(Seminar seminar) {
+        return seminar.getStartDate().isBefore(LocalDate.now())
+                && !CLOSED_SEMINAR_STATUSES.contains(seminar.getStatus());
+    }
+
+    private void refreshOverdueSeminars() {
+        seminarRepository.markOverdueSeminars(LocalDate.now(), OVERDUE_EXCLUDED_STATUSES);
+    }
+
     @Transactional(readOnly = true)
     public SeminarRequirementsPreviewResponse getRequirementsPreview(Long id) {
         Seminar seminar = findEntity(id);
@@ -178,9 +214,17 @@ public class SeminarService {
         );
     }
 
-    private Specification<Seminar> buildSpecification(SeminarStatus status, String city, Long coordinatorId) {
+    private Specification<Seminar> buildSpecification(
+            SeminarStatus status,
+            String city,
+            Long coordinatorId,
+            UserRole currentRole
+    ) {
         return (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            if (currentRole != UserRole.ADMIN) {
+                predicates.add(root.get("status").in(FINAL_SEMINAR_STATUSES));
+            }
             if (status != null) {
                 predicates.add(builder.equal(root.get("status"), status));
             }
@@ -192,6 +236,15 @@ public class SeminarService {
             }
             return builder.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    private void ensureVisibleForCurrentUser(Seminar seminar) {
+        if (requireCurrentUser().getRole() == UserRole.ADMIN) {
+            return;
+        }
+        if (!FINAL_SEMINAR_STATUSES.contains(seminar.getStatus())) {
+            throw new ResourceNotFoundException("Seminar not found: " + seminar.getId());
+        }
     }
 
     private void ensureConsultantAvailable(Long consultantId, LocalDate startDate, LocalDate endDate) {

@@ -42,7 +42,7 @@ export function Sidebar({ currentTab, onChangeTab }: SidebarProps) {
         </div>
 
         <nav className="space-y-4 px-4 py-8">
-          {!isConsultant && (
+          {!isConsultant && !canViewMaterialRequests && (
             <div className="space-y-1">
               <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
                 Seminar Booking
@@ -77,7 +77,7 @@ export function Sidebar({ currentTab, onChangeTab }: SidebarProps) {
             </div>
           )}
 
-          {!isConsultant && (
+          {isAdmin && (
             <div className="space-y-1 border-t border-white/10 pt-4">
               <p className="mb-2 px-4 text-[10px] font-black uppercase tracking-wider text-white/40">
                 Dữ liệu hệ thống

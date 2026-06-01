@@ -334,8 +334,18 @@ function ConsultantCard({ info }: { info?: any }) {
     >
       {info ? (
         <div className="flex gap-4 text-left">
-          <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#CFFFF7] text-[#257AB7] shadow-inner">
-            <User className="h-10 w-10 fill-[#257AB7]/20 stroke-[#257AB7]" />
+          <div className="relative h-14 w-14 shrink-0 rounded-full overflow-hidden border border-[#38D9CD] bg-[#CFFFF7] text-[#257AB7] shadow-inner">
+            {info.avatarUrl ? (
+              <img
+                src={`http://localhost:8080/api/v1/facility-contracts/view-file?path=${encodeURIComponent(info.avatarUrl)}`}
+                alt="Avatar"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="grid h-full w-full place-items-center">
+                <User className="h-10 w-10 fill-[#257AB7]/20 stroke-[#257AB7]" />
+              </div>
+            )}
           </div>
           <div className="min-w-0">
             <h3 className="truncate text-sm font-extrabold text-[#092F5A]">{info.fullName}</h3>

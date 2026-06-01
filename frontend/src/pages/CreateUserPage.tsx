@@ -1,20 +1,26 @@
 import {
+  Camera,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Loader2,
+  Lock,
   KeyRound,
   Mail,
   Pencil,
   Phone,
   RotateCcw,
+  ShieldCheck,
   Search,
   ShieldAlert,
   UserPlus,
+  User,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   api,
   type CreateUserRequest,
+  type ConsultantResponse,
   type UpdateUserRequest,
   type UserResponse,
   type UserRole,
@@ -61,10 +67,13 @@ export function CreateUserPage() {
   const [actionUserId, setActionUserId] = useState<number | null>(null)
   const [formState, setFormState] = useState<UserFormState>(initialCreateForm)
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null)
+  const [editingConsultantProfile, setEditingConsultantProfile] = useState<ConsultantResponse | null>(null)
   const [resettingUser, setResettingUser] = useState<UserResponse | null>(null)
   const [resetPassword, setResetPassword] = useState('')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [isLoadingConsultantProfile, setIsLoadingConsultantProfile] = useState(false)
+  const [isUploadingConsultantAvatar, setIsUploadingConsultantAvatar] = useState(false)
 
   const roleStats = useMemo(
     () =>
@@ -132,6 +141,7 @@ export function CreateUserPage() {
 
   function openEditModal(user: UserResponse) {
     setEditingUser(user)
+    setEditingConsultantProfile(null)
     setFormState({
       fullName: user.fullName,
       email: user.email,
@@ -142,6 +152,40 @@ export function CreateUserPage() {
     })
     setErrorMsg(null)
     setSuccessMsg(null)
+    if (user.role === 'CONSULTANT') {
+      void loadConsultantProfileForUser(user.userId)
+    }
+  }
+
+  async function loadConsultantProfileForUser(userId: number) {
+    setIsLoadingConsultantProfile(true)
+    try {
+      const profile = await api.getConsultantByUserId(userId)
+      setEditingConsultantProfile(profile)
+    } catch (error: any) {
+      setErrorMsg(error.message || 'Không thể tải hồ sơ consultant.')
+    } finally {
+      setIsLoadingConsultantProfile(false)
+    }
+  }
+
+  async function handleConsultantAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !editingConsultantProfile) return
+
+    setIsUploadingConsultantAvatar(true)
+    setErrorMsg(null)
+    setSuccessMsg(null)
+    try {
+      const updated = await api.uploadConsultantAvatar(editingConsultantProfile.consultantId, file)
+      setEditingConsultantProfile(updated)
+      setSuccessMsg(`Đã cập nhật ảnh đại diện cho ${updated.fullName}.`)
+    } catch (error: any) {
+      setErrorMsg(error.message || 'Không thể upload ảnh đại diện consultant.')
+    } finally {
+      setIsUploadingConsultantAvatar(false)
+    }
   }
 
   async function handleUpdateUser(event: React.FormEvent<HTMLFormElement>) {
@@ -227,6 +271,7 @@ export function CreateUserPage() {
   function closeModal() {
     if (isSubmitting) return
     setEditingUser(null)
+    setEditingConsultantProfile(null)
     setResettingUser(null)
     setResetPassword('')
     setFormState(initialCreateForm)
@@ -299,8 +344,15 @@ export function CreateUserPage() {
 
           <StatusMessage errorMsg={errorMsg} successMsg={successMsg} />
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-separate border-spacing-0">
+          <div>
+            <table className="w-full table-fixed border-separate border-spacing-0">
+              <colgroup>
+                <col className="w-[24%]" />
+                <col className="w-[30%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
+                <col className="w-[10%]" />
+              </colgroup>
               <thead>
                 <tr className="bg-[#F8FBFF] text-left text-[11px] font-black uppercase tracking-wider text-slate-500">
                   <th className="px-5 py-4">Người dùng</th>
@@ -380,6 +432,14 @@ export function CreateUserPage() {
 
       {editingUser && (
         <Modal title={`Cập nhật ${editingUser.fullName}`} onClose={closeModal}>
+          {editingUser.role === 'CONSULTANT' && (
+            <ConsultantAvatarAdminPanel
+              consultant={editingConsultantProfile}
+              isLoading={isLoadingConsultantProfile}
+              isUploading={isUploadingConsultantAvatar}
+              onAvatarChange={handleConsultantAvatarChange}
+            />
+          )}
           <UserForm
             formState={formState}
             isSubmitting={isSubmitting}
@@ -450,6 +510,67 @@ function CreateUserPanel({
         onSubmit={onSubmit}
       />
     </aside>
+  )
+}
+
+function ConsultantAvatarAdminPanel({
+  consultant,
+  isLoading,
+  isUploading,
+  onAvatarChange,
+}: {
+  consultant: ConsultantResponse | null
+  isLoading: boolean
+  isUploading: boolean
+  onAvatarChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <div className="mb-5 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4">
+      <div className="flex items-center gap-4">
+        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-[#38D9CD] bg-white">
+          {isLoading || isUploading ? (
+            <div className="grid h-full w-full place-items-center text-[#0B3970]">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : consultant?.avatarUrl ? (
+            <img
+              src={`http://localhost:8080/api/v1/facility-contracts/view-file?path=${encodeURIComponent(consultant.avatarUrl)}`}
+              alt="Avatar consultant"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="grid h-full w-full place-items-center bg-[#B9FFF1] text-[#009C8E]">
+              <User className="h-9 w-9" />
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-black uppercase tracking-wider text-cyan-700">
+            Ảnh đại diện consultant
+          </p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+            Admin quản lý ảnh đại diện cho consultant. Consultant chỉ xem ảnh trong lịch trình cá nhân.
+          </p>
+        </div>
+
+        <label
+          className={`inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#0B3970] px-4 text-xs font-black text-white transition hover:bg-[#126CB0] ${
+            isLoading || isUploading || !consultant ? 'pointer-events-none opacity-60' : ''
+          }`}
+        >
+          <Camera className="h-4 w-4" />
+          {isUploading ? 'Đang upload...' : 'Upload ảnh'}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={isLoading || isUploading || !consultant}
+            onChange={onAvatarChange}
+          />
+        </label>
+      </div>
+    </div>
   )
 }
 
@@ -548,34 +669,57 @@ function UserRow({
 }) {
   return (
     <tr className="border-t border-slate-100 text-sm">
-      <td className="border-t border-slate-100 px-5 py-4">
-        <div className="font-black text-[#0B3970]">{user.fullName}</div>
+      <td className="border-t border-slate-100 px-5 py-4 align-top">
+        <div className="break-words font-black text-[#0B3970]">{user.fullName}</div>
         <div className="mt-1 text-xs font-bold text-slate-400">ID #{user.userId}</div>
       </td>
-      <td className="border-t border-slate-100 px-5 py-4">
-        <div className="font-bold text-slate-700">{user.email}</div>
+      <td className="border-t border-slate-100 px-5 py-4 align-top">
+        <div className="break-all font-bold text-slate-700">{user.email}</div>
         <div className="mt-1 text-xs font-bold text-slate-400">{user.phone}</div>
       </td>
-      <td className="border-t border-slate-100 px-5 py-4">
-        <span className="rounded-full bg-[#E9F5FF] px-3 py-1 text-xs font-black text-[#0B3970]">
+      <td className="border-t border-slate-100 px-5 py-4 align-top">
+        <span className="inline-flex max-w-full rounded-2xl bg-[#E9F5FF] px-3 py-2 text-xs font-black leading-5 text-[#0B3970] break-words">
           {roleLabel(user.role)}
         </span>
       </td>
-      <td className="border-t border-slate-100 px-5 py-4">
-        <button
-          type="button"
-          disabled={isBusy}
-          onClick={onToggleStatus}
-          className={`rounded-full px-3 py-1 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-            user.status === 'ACTIVE'
-              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-              : 'bg-red-50 text-red-700 hover:bg-red-100'
-          }`}
-        >
-          {isBusy ? 'Đang đổi...' : statusLabel(user.status)}
-        </button>
+      <td className="border-t border-slate-100 px-5 py-4 align-top">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs font-black ${
+              user.status === 'ACTIVE'
+                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
+            }`}
+          >
+            {user.status === 'ACTIVE' ? (
+              <ShieldCheck className="h-4 w-4" />
+            ) : (
+              <Lock className="h-4 w-4" />
+            )}
+            <span>{user.status === 'ACTIVE' ? 'Hoạt động' : 'Đã khóa'}</span>
+          </span>
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={onToggleStatus}
+            title={user.status === 'ACTIVE' ? 'Khóa tài khoản này' : 'Mở khóa tài khoản này'}
+            aria-label={user.status === 'ACTIVE' ? 'Khóa tài khoản này' : 'Mở khóa tài khoản này'}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              user.status === 'ACTIVE'
+                ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            }`}
+          >
+            {user.status === 'ACTIVE' ? (
+              <Lock className="h-3.5 w-3.5" />
+            ) : (
+              <ShieldCheck className="h-3.5 w-3.5" />
+            )}
+            <span>{isBusy ? '...' : user.status === 'ACTIVE' ? 'Khóa' : 'Mở'}</span>
+          </button>
+        </div>
       </td>
-      <td className="border-t border-slate-100 px-5 py-4">
+      <td className="border-t border-slate-100 px-5 py-4 align-top">
         <div className="flex justify-end gap-2">
           <IconButton label="Sửa tài khoản" onClick={onEdit}>
             <Pencil className="h-4.5 w-4.5" />

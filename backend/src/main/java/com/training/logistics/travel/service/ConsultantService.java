@@ -9,6 +9,7 @@ import com.training.logistics.travel.exception.ForbiddenTravelAccessException;
 import com.training.logistics.travel.exception.TravelArrangementNotFoundException;
 import com.training.logistics.travel.model.Consultant;
 import com.training.logistics.travel.repository.ConsultantRepository;
+import com.training.logistics.facility_contract.service.MinioStorageService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -19,6 +20,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.Objects;
 public class ConsultantService {
     private final ConsultantRepository consultantRepository;
     private final UserRepository userRepository;
+    private final MinioStorageService minioStorageService;
 
     @Transactional
     public ConsultantResponse createBlankProfile(Long userId) {
@@ -57,6 +60,13 @@ public class ConsultantService {
         return toResponse(consultant);
     }
 
+    @Transactional(readOnly = true)
+    public ConsultantResponse getConsultantByUserId(Long userId) {
+        Consultant consultant = consultantRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new TravelArrangementNotFoundException("Consultant not found for user"));
+        return toResponse(consultant);
+    }
+
     @Transactional
     public ConsultantResponse updateMyProfile(UpdateMyConsultantProfileRequest request) {
         Consultant consultant = consultantRepository.findByUserUserId(getCurrentUserId())
@@ -76,6 +86,9 @@ public class ConsultantService {
         consultant.setAddress(trim(request.getAddress()));
         consultant.setCity(trim(request.getCity()));
         consultant.setCountry(trim(request.getCountry()));
+        if (request.getAvatarUrl() != null) {
+            consultant.setAvatarUrl(trim(request.getAvatarUrl()));
+        }
         return toResponse(consultant);
     }
 
@@ -119,8 +132,29 @@ public class ConsultantService {
                 consultant.getTravelPreference(),
                 consultant.getAddress(),
                 consultant.getCity(),
-                consultant.getCountry()
+                consultant.getCountry(),
+                consultant.getAvatarUrl()
         );
+    }
+
+    @Transactional
+    public ConsultantResponse updateConsultantAvatar(Long consultantId, MultipartFile file) {
+        Consultant consultant = findConsultant(consultantId);
+        return updateAvatar(consultant, file);
+    }
+
+    private ConsultantResponse updateAvatar(Consultant consultant, MultipartFile file) {
+        String filename = "avatar_" + consultant.getConsultantId() + "_" + System.currentTimeMillis();
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null && originalFilename.contains(".")) {
+            filename += originalFilename.substring(originalFilename.lastIndexOf("."));
+        } else {
+            filename += ".jpg";
+        }
+        
+        String avatarUrl = minioStorageService.uploadFile(filename, file);
+        consultant.setAvatarUrl(avatarUrl);
+        return toResponse(consultantRepository.save(consultant));
     }
 
     private Long getCurrentUserId() {
