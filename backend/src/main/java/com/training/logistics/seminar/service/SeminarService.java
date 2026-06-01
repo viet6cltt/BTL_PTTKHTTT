@@ -4,6 +4,7 @@ import com.training.logistics.auth.model.User;
 import com.training.logistics.auth.model.UserRole;
 import com.training.logistics.auth.repository.UserRepository;
 import com.training.logistics.common.exception.BadRequestException;
+import com.training.logistics.common.exception.ConflictException;
 import com.training.logistics.common.exception.ResourceNotFoundException;
 import com.training.logistics.masterdata.model.AudioVisualEquipment;
 import com.training.logistics.masterdata.model.AvEquipmentRequirement;
@@ -118,6 +119,10 @@ public class SeminarService {
         }
         if (!currentUser.getUserId().equals(request.logisticsCoordinatorId())) {
             throw new BadRequestException("Coordinators can only claim seminars for themselves");
+        }
+        User assignedCoordinator = seminar.getCoordinator();
+        if (assignedCoordinator != null && !assignedCoordinator.getUserId().equals(currentUser.getUserId())) {
+            throw new ConflictException("Seminar has already been claimed by another coordinator");
         }
         User coordinator = requireUser(request.logisticsCoordinatorId(), "Logistics coordinator");
         seminar.setCoordinator(coordinator);
