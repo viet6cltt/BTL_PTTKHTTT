@@ -32,7 +32,7 @@ public class SeminarController {
     private final SeminarService seminarService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('BOOKING_STAFF', 'ADMIN')")
+    @PreAuthorize("hasRole('BOOKING_STAFF')")
     public ResponseEntity<SeminarResponse> create(@Valid @RequestBody SeminarCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(seminarService.create(request));
     }
