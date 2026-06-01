@@ -2,6 +2,7 @@ const API_ROOT_URL = 'http://localhost:8080'
 const API_BASE_URL = `${API_ROOT_URL}/api/v1`
 
 export type UserRole = 'BOOKING_STAFF' | 'LOGISTICS_COORDINATOR' | 'CONSULTANT' | 'MATERIALS_STAFF' | 'ADMIN'
+export type TravelArrangementStatus = 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
 
 export interface AuthResponse {
   accessToken: string
@@ -117,8 +118,8 @@ export interface TravelArrangementResponse {
   seatInfo: string | null
   cost: number | null
   confirmationSentDatetime: string | null
-  status?: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
-  travelArrangementStatus?: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+  status?: TravelArrangementStatus
+  travelArrangementStatus?: TravelArrangementStatus
 }
 
 export interface TravelFacilityInfoResponse {
@@ -134,7 +135,7 @@ export interface TravelItineraryResponse {
   arrangements: TravelArrangementResponse[]
   facilityReservations: TravelFacilityInfoResponse[]
   totalCost: number
-  overallStatus: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+  overallStatus: TravelArrangementStatus
 }
 
 export interface MaterialRequestItem {
@@ -171,6 +172,31 @@ export interface FacilityResponse {
   salesManagerEmail: string
   numberOfRoom: number
   costForEachDay: number
+}
+
+export interface FacilityRequest {
+  facilityName: string
+  address: string
+  city: string
+  maxCapacity: number
+  salesManagerName?: string
+  salesManagerPhone?: string
+  salesManagerEmail?: string
+  numberOfRoom?: number
+  costForEachDay?: number
+}
+
+export interface ConsultantResponse {
+  consultantId: number
+  userId: number
+  fullName: string
+  email: string
+  phone: string
+  specialty: string | null
+  travelPreference: string | null
+  address: string | null
+  city: string | null
+  country: string | null
 }
 
 export interface AudioVisualEquipmentResponse {
@@ -304,7 +330,7 @@ export const api = {
     const params = new URLSearchParams()
     if (filters.status) params.append('status', filters.status)
     if (filters.city) params.append('city', filters.city)
-    if (filters.coordinatorId !== undefined) params.append('coordinatorId', String(filters.coordinatorId))
+    if (filters.coordinatorId) params.append('coordinatorId', String(filters.coordinatorId))
     if (filters.page !== undefined) params.append('page', String(filters.page))
     if (filters.size !== undefined) params.append('size', String(filters.size))
 
@@ -365,17 +391,7 @@ export const api = {
     return handleResponse<PageResponse<FacilityResponse>>(res)
   },
 
-  async createFacility(data: {
-    facilityName: string
-    address: string
-    city: string
-    maxCapacity: number
-    salesManagerName?: string
-    salesManagerPhone?: string
-    salesManagerEmail?: string
-    numberOfRoom?: number
-    costForEachDay?: number
-  }): Promise<FacilityResponse> {
+  async createFacility(data: FacilityRequest): Promise<FacilityResponse> {
     const res = await fetch(`${API_BASE_URL}/facilities`, {
       method: 'POST',
       headers: getHeaders(),
@@ -454,29 +470,6 @@ export const api = {
       body: formData,
     })
     return handleResponse<any>(res)
-  },
-
-  async updateRoomReservation(roomReservationId: number, formData: FormData): Promise<RoomReservation> {
-    const token = localStorage.getItem('token')
-    const headers: HeadersInit = {}
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    const res = await fetch(`${API_BASE_URL}/reservations/rooms/${roomReservationId}`, {
-      method: 'PUT',
-      headers,
-      body: formData,
-    })
-    return handleResponse<RoomReservation>(res)
-  },
-
-  async deleteRoomReservation(roomReservationId: number): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/reservations/rooms/${roomReservationId}`, {
-      method: 'DELETE',
-      headers: getHeaders(),
-    })
-    return handleResponse<void>(res)
   },
 
   // Travel
@@ -564,7 +557,7 @@ export const api = {
     return handleResponse<TravelArrangementResponse>(res)
   },
 
-  async updateTravelStatus(travelArrangementId: number, status: 'BOOKED' | 'CONFIRMED' | 'CANCELLED'): Promise<any> {
+  async updateTravelStatus(travelArrangementId: number, status: TravelArrangementStatus): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/travel-arrangements/${travelArrangementId}/status`, {
       method: 'PUT',
       headers: getHeaders(),
@@ -666,11 +659,32 @@ export const api = {
     return handleResponse<void>(res)
   },
 
-  async getConsultants(): Promise<PageResponse<any>> {
+  async getConsultants(): Promise<PageResponse<ConsultantResponse>> {
     const res = await fetch(`${API_BASE_URL}/consultants`, {
       headers: getHeaders(),
     })
-    return handleResponse<PageResponse<any>>(res)
+    return handleResponse<PageResponse<ConsultantResponse>>(res)
+  },
+
+  async getConsultantById(id: number): Promise<ConsultantResponse> {
+    const res = await fetch(`${API_BASE_URL}/consultants/${id}`, {
+      headers: getHeaders(),
+    })
+    return handleResponse<ConsultantResponse>(res)
+  },
+
+  async updateMyConsultantProfile(data: {
+    travelPreference?: string
+    address?: string
+    city?: string
+    country?: string
+  }): Promise<ConsultantResponse> {
+    const res = await fetch(`${API_BASE_URL}/consultants/me`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    })
+    return handleResponse<ConsultantResponse>(res)
   },
 
   async getMaterials(): Promise<MaterialResponse[]> {

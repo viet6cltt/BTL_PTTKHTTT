@@ -63,4 +63,13 @@ public class SeminarClientImpl implements SeminarClient {
             throw new com.training.logistics.common.exception.BadRequestException("Only the coordinator assigned to this seminar can perform this action");
         }
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Integer> getAnticipatedRegistrants(Long seminarId) {
+        if (seminarId == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(seminarService.findEntity(seminarId).getAnticipatedRegistrants());
+    }
 }

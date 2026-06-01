@@ -113,7 +113,7 @@ public class FacilityContractService {
     }
 
     private void validateReservedRoomsCoverRegistrants(SeminarFacilityContract contract) {
-        Optional<Integer> anticipatedRegistrants = masterDataClient.getAnticipatedRegistrants(contract.getSeminarId());
+        Optional<Integer> anticipatedRegistrants = seminarClient.getAnticipatedRegistrants(contract.getSeminarId());
         if (anticipatedRegistrants.isEmpty()) {
             return;
         }
