@@ -28,7 +28,7 @@ export function AllMaterialsPage() {
     loadRequests()
   }, [])
 
-  async function handleStatusUpdate(id: number, nextStatus: 'PACKED' | 'SHIPPED' | 'DELIVERED') {
+  async function handleStatusUpdate(id: number, nextStatus: 'PACKED' | 'SHIPPED') {
     try {
       setErrorMsg(null)
       await api.updateShipmentStatus(id, nextStatus)
@@ -47,7 +47,7 @@ export function AllMaterialsPage() {
     )
   }
 
-  const isMaterialsStaff = user?.role === 'MATERIALS_STAFF' || user?.role === 'ADMIN'
+  const isMaterialsStaff = user?.role === 'MATERIALS_STAFF'
 
   return (
     <div className="space-y-7 text-left">
@@ -163,15 +163,6 @@ export function AllMaterialsPage() {
                           Giao cho đối tác Viettel Post (SHIPPED)
                         </button>
                       )}
-                      {r.shipmentStatus === 'SHIPPED' && (
-                        <button
-                          type="button"
-                          onClick={() => handleStatusUpdate(r.id, 'DELIVERED')}
-                          className="rounded bg-teal-500 px-3.5 py-2 text-xs font-black text-white hover:bg-teal-600 transition shadow-sm"
-                        >
-                          Cập nhật đã giao tới Khách sạn (DELIVERED)
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
@@ -190,6 +181,18 @@ export function AllMaterialsPage() {
 
 function formatDate(isoDate: string) {
   if (!isoDate) return ''
-  const [year, month, day] = isoDate.split('-')
-  return `${day}/${month}/${year}`
+
+  // Prefer stable formatting for date-only strings to avoid timezone shifts.
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate)
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch
+    return `${day}/${month}/${year}`
+  }
+
+  const parsed = new Date(isoDate)
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString('vi-VN')
+  }
+
+  return isoDate
 }
