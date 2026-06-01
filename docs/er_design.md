@@ -1,244 +1,245 @@
 1. Mô tả các quan hệ và thuộc tính
 
-**SEMINAR\_TYPE**
+## USERS
 
-Lưu thông tin về loại seminar mà công ty tổ chức.
-
-| Attribute | Mô tả | Ràng buộc |
-| :---- | :---- | :---- |
-| seminar\_type\_id |  | PK |
-| type\_name | Tên loại seminar |  |
-| description | Mô tả về loại seminar này |  |
-| duration (h) | Thời lượng seminar dự kiến theo số giờ | \>0 |
-| arrangement\_notes | Ghi chú về cách bố trí phòng, chỗ ngồi hoặc yêu cầu tổ chức của loại seminar này. |  |
-
-**SEMINAR**
-
-Lưu thông tin về một seminar cụ thể đã được lên lịch do Booking Department.
+Lưu tài khoản người dùng hệ thống.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| seminar\_id |  | PK |
-| seminar\_type\_id |  | FK tới SEMINAR\_TYPE |
-| consultant\_id |  | FK tới CONSULTANT |
-| seminar\_name | Tên seminar cụ thể |  |
-| start\_date | Ngày bắt đầu seminar |  |
-| end\_date | Ngày kết thúc seminar | Trước start\_date |
-| city | Thành phố nơi seminar được tổ chức |  |
-| anticipated\_registrants | Số lượng người tham dự dự kiến. |  |
-| booking\_created\_date | Ngày booking department tạo lịch seminar. |  |
-| note | Ghi chú thêm cho seminar |  |
-| employee\_id | Nhân viên phụ trách, được gán khi tạo draft contract | FK tới EMPLOYEE, NULL khi mới tạo seminar |
+| user_id | Mã người dùng | PK |
+| full_name | Họ tên người dùng | NOT NULL |
+| email | Email đăng nhập/liên hệ | NOT NULL, UNIQUE |
+| password_hash | Mật khẩu đã hash | NOT NULL |
+| phone | Số điện thoại | NOT NULL, UNIQUE |
+| role | Vai trò người dùng | NOT NULL, BOOKING_STAFF/LOGISTICS_COORDINATOR/CONSULTANT/MATERIALS_STAFF/ADMIN |
+| status | Trạng thái tài khoản | NOT NULL, ACTIVE/DISABLED, default ACTIVE |
+| created_at | Thời điểm tạo tài khoản | NOT NULL, default CURRENT_TIMESTAMP |
 
-**CONSULTANT**
+## CONSULTANTS
 
-Lưu thông tin về chuyên gia đào tạo.
+Lưu hồ sơ chuyên gia đào tạo. Mỗi consultant gắn với đúng một user có vai trò
+`CONSULTANT`.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| consultant\_id |  | PK |
-| full\_name | Họ tên consultant |  |
-| phone | Số điện thoại liên hệ |  |
-| email | Email liên hệ |  |
-| address | Địa chỉ của consultant |  |
-| city | Thành phố nơi consultant sinh sống hoặc làm việc |  |
+| consultant_id | Mã consultant | PK |
+| user_id | Tài khoản người dùng của consultant | FK tới USERS, NOT NULL, UNIQUE |
+| specialty | Chuyên môn/lĩnh vực đào tạo |  |
+| travel_preference | Ghi chú về ưu tiên di chuyển |  |
+| address | Địa chỉ consultant |  |
+| city | Thành phố của consultant |  |
 | country | Quốc gia của consultant |  |
-| work | Chuyên môn, vị trí công việc hoặc lĩnh vực đào tạo của consultant. |  |
 
-**FACILITY**
+## SEMINAR_TYPE
 
-Lưu thông tin về địa điểm/cơ sở tổ chức seminar
-
-| Attribute | Mô tả | Ràng buộc |
-| :---- | :---- | :---- |
-| facility\_id |  | PK |
-| facility\_name | Tên địa điểm/cơ sở tổ chức |  |
-| address | Địa chỉ facility |  |
-| city | Thành phố của facility |  |
-| phone | Số điện thoại liên hệ chung của facility |  |
-| email | Email liên hệ chung của facility |  |
-| sales\_manager\_name | Tên sales manager phụ trách facility |  |
-| sales\_manager\_phone | Số điện thoại sales manager |  |
-| sales\_manager\_email | Email sales manager |  |
-| number\_of\_room | Số phòng họp ở facility |  |
-| cost\_for\_each\_day | Giá tiền tham khảo để tổ chức trọn gói ở facility theo ngày |  |
-
-**SEMINAR\_FACILITY\_CONTRACT**
-
-Lưu thông tin hợp đồng/thoả thuận đặt facility cho mỗi seminar.
+Lưu danh mục loại seminar mà công ty tổ chức.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| contract\_id |  | PK |
-| senimar\_id |  | FK đến SEMINAR |
-| facility\_id |  | FK đến FACILITY |
-| reservation\_date | Ngày đặt facility |  |
-| contract\_created\_date | Ngày tạo hợp đồng | NULL nếu chưa SIGNED |
-| status | Trạng thái hợp đồng | NOTSIGNED/SIGNED |
-| total\_cost | Giá chốt với facility | NULL nếu chưa SIGNED |
+| seminar_type_id | Mã loại seminar | PK |
+| type_name | Tên loại seminar | NOT NULL |
+| description | Mô tả loại seminar |  |
+| duration | Thời lượng seminar dự kiến theo giờ | NOT NULL, > 0 |
+| arrangement_notes | Ghi chú về cách bố trí phòng/chỗ ngồi/tổ chức |  |
 
-TODO khi triển khai Contract module:
+## SEMINAR
 
-- Khi coordinator tạo draft contract cho một seminar, hệ thống phải gán `SEMINAR.employee_id` bằng ID của user đang đăng nhập.
-- Việc tạo draft contract và gán `employee_id` phải nằm trong cùng transaction để tránh contract được tạo nhưng seminar chưa được nhận phụ trách.
-- Không nhận `employee_id` từ frontend cho thao tác tạo draft contract; backend phải lấy từ authenticated user.
-- Nếu seminar đã có `employee_id`, cần kiểm tra rule nghiệp vụ: cho phép cùng employee tiếp tục chỉnh sửa, hoặc trả `409 Conflict` nếu employee khác tạo draft contract.
-- Cần kiểm soát để một seminar không có nhiều draft contract active ngoài ý muốn.
-
-**CONTRACT\_DOCUMENT**
-
-Lưu thông tin về file hợp đồng.
+Lưu một seminar cụ thể do booking staff tạo và logistics coordinator phụ trách
+về sau.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| document\_id |  | PK |
-| contract\_id |  | FK đến SEMINAR\_FACILITY\_CONTRACT  |
-| file\_name | Tên file tài liệu |  |
-| file\_type | Định dạng file được lưu trữ trong hệ thống |  |
-| file\_url | Đường dẫn đến file scan/tài liệu được lưu trong hệ thống |  |
-| uploaded\_at | Thời điểm tài liệu được upload |  |
-| notes | Ghi chú thêm về tài liệu |  |
+| seminar_id | Mã seminar | PK |
+| seminar_type_id | Loại seminar | FK tới SEMINAR_TYPE, NOT NULL |
+| consultant_id | Consultant phụ trách nội dung | FK tới CONSULTANTS, NOT NULL |
+| booking_department_user_id | Booking staff tạo seminar | FK tới USERS, NOT NULL |
+| coordinator_user_id | Logistics coordinator được gán/claim seminar | FK tới USERS, NULL |
+| seminar_name | Tên seminar | NOT NULL |
+| expected_time_slot | Khung thời gian dự kiến | NOT NULL, FULL_DAY/MORNING/AFTERNOON |
+| status | Trạng thái seminar | NOT NULL, PENDING_LOGISTICS/FACILITY_SECURED/TRAVEL_CONFIRMED/READY_FOR_SEMINAR/CANCELLED |
+| start_date | Ngày bắt đầu | NOT NULL |
+| end_date | Ngày kết thúc | NOT NULL, >= start_date |
+| city | Thành phố tổ chức | NOT NULL |
+| anticipated_registrants | Số người tham dự dự kiến | NOT NULL, > 0 |
+| booking_created_date_time | Thời điểm booking staff tạo seminar | NOT NULL, default CURRENT_TIMESTAMP |
+| note | Ghi chú thêm |  |
 
-**FACILITY\_ROOM\_RESERVATION**
+## FACILITIES
 
-Lưu thông tin các phòng được đặt trong hợp đồng.
-
-| Attribute | Mô tả | Ràng buộc |
-| :---- | :---- | :---- |
-| room\_id |  | PK |
-| contract\_id |  | FK đến SEMINAR\_FACILITY\_CONTRACT  |
-| num\_seats | Số chỗ ngồi trong phòng |  |
-| start\_time | Thời gian bắt đầu sử dụng phòng |  |
-| end\_time | Thời gian kết thúc sử dụng phòng |  |
-| room\_width | Chiều rộng phòng |  |
-| room\_length | Chiều dài phòng |  |
-| seat\_arrangement\_notes | Ghi chú về cách bố trí chỗ ngồi trong phòng |  |
-| room\_cost | Giá sử dụng phòng này |  |
-
-**TRAVEL\_ARRANGEMENT**
-
-Lưu thông tin sắp xếp di chuyển cho consultant.
+Lưu thông tin địa điểm/cơ sở tổ chức seminar.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| travel\_arrangement\_id |  | PK |
-| seminar\_id |  | FK đến SEMINAR  |
-| consultant\_id |  | FK đến CONSULTANT |
-| travel\_agency\_name | Tên đại lý du lịch hợp tác |  |
-| transport\_mode | Phương thức di chuyển |  |
-| carrier\_name | Tên hãng vận chuyển (nếu có) |  |
-| service\_number | Số chuyến bay, số tàu hoặc mã dịch vụ (nếu có) |  |
-| departure\_location | Địa điểm khởi hành |  |
-| arrival\_location | Địa điểm đến |  |
-| departure\_time | Thời gian khởi hành |  |
-| arrival\_time | Thời gian đến |  |
-| seat\_info | Thông tin ghế (nếu có) |   |
-| cost | Giá đã thoả thuận với travel agency (nếu có) |  |
-| confirmation\_sent\_date | Ngày gửi xác nhận/lịch trình cho consultant |  |
-| travel\_arrangement\_status | Consultant xác nhận lịch trình | CONFIRM/NOTCONFIRM |
+| facility_id | Mã facility | PK |
+| facility_name | Tên địa điểm/cơ sở | NOT NULL |
+| address | Địa chỉ facility | NOT NULL |
+| city | Thành phố của facility | NOT NULL |
+| max_capacity | Sức chứa tối đa | NOT NULL |
+| sales_manager_name | Tên sales manager phụ trách |  |
+| sales_manager_phone | Số điện thoại sales manager |  |
+| sales_manager_email | Email sales manager |  |
+| number_of_room | Số phòng họp |  |
+| cost_for_each_day | Giá tham khảo theo ngày |  |
+| created_at | Thời điểm tạo facility | NOT NULL, default CURRENT_TIMESTAMP |
 
-**MATERIAL**
+## SEMINAR_FACILITY_CONTRACTS
 
-Lưu thông tin vật tư/tài liệu dùng cho seminar mà MATERIAL DEPARTMENT quản lý.
-
-Hệ thống không quản lý cụ thể số lượng cụ thể của MATERIAL mà chỉ lưu thông tin chung.
+Lưu hợp đồng/thỏa thuận đặt facility cho seminar.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| material\_id |  | PK |
-| material\_name | Tên vật tư/tài liệu |  |
-| material\_type | Loại vật tư |  |
-| description | Mô tả về vật tư |  |
-| unit | Đơn vị tính |  |
+| contract_id | Mã hợp đồng | PK |
+| seminar_id | Seminar được đặt facility | NOT NULL, UNIQUE, tham chiếu logic tới SEMINAR |
+| facility_id | Facility được chọn | FK tới FACILITIES, NOT NULL |
+| total_cost | Tổng chi phí đã thỏa thuận |  |
+| contract_created_time | Thời điểm tạo/ký hợp đồng |  |
+| contract_doc_path | Đường dẫn file hợp đồng |  |
+| status | Trạng thái hợp đồng | NOT NULL, PENDING_NEGOTIATE/APPROVED/REJECTED, default PENDING_NEGOTIATE |
+| notes | Ghi chú hợp đồng |  |
 
-**MATERIAL\_REQUIREMENT**
+## FACILITY_ROOM_RESERVATIONS
 
-Lưu danh sách vật tư cần cho từng loại seminar.
-
-| Attribute | Mô tả | Ràng buộc |
-| :---- | :---- | :---- |
-| seminar\_type\_id |  | PK, FK đến SEMINAR\_TYPE |
-| material\_id |  | PK, FK đến MATERIAL |
-| default\_quantity | Số lượng mặc định cần dùng |  |
-| is\_depend\_on\_num\_participant | Có phụ thuộc vào số lượng người đăng kí hay không |  |
-| participant\_per\_quantity | Số lượng người sử dụng cho mỗi vật tư | NULL nếu is\_depend\_on\_num\_participant \= false |
-| notes | Ghi chú thêm về yêu cầu vật tư |  |
-
-**MATERIAL\_REQUEST**
-
-Lưu phần thông tin chung của một yêu cầu gửi vật tư cho một seminar cụ thể.
-
-Trong phiên bản hiện tại, Contract chưa được triển khai nên yêu cầu vật tư liên kết trực tiếp với SEMINAR. Sau khi SEMINAR\_FACILITY\_CONTRACT được triển khai, contract\_id sẽ được dùng để liên kết tới hợp đồng đã ký, đồng thời vẫn giữ seminar\_id để truy vấn và kiểm tra tính nhất quán.
-
-Một yêu cầu vật tư có thể gồm nhiều dòng vật tư trong MATERIAL\_REQUEST\_ITEM.
+Lưu danh sách phòng được đặt trong hợp đồng facility.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| material\_request\_id |  | PK |
-| seminar\_id |  | FK tới SEMINAR |
-| contract\_id |  | FK tới SEMINAR\_FACILITY\_CONTRACT sau khi Contract được triển khai; NULL trong phiên bản hiện tại |
-| request\_date | Ngày tạo yêu cầu vật tư |  |
-| needed\_by\_date | Ngày cần nhận vật tư tại facility | Sau hoặc bằng request\_date |
-| shipment\_status | Trạng thái vận chuyển | REQUESTED/PACKED/SHIPPED/DELIVERED |
-| delivered\_confirmed\_at | Thời điểm coordinator xác nhận đã nhận vật tư | NULL nếu chưa DELIVERED |
-| delivery\_confirmation\_note | Ghi chú khi xác nhận đã nhận vật tư |  |
-| notes | Ghi chú thêm về yêu cầu hoặc shipment |  |
-| created\_at | Thời điểm bản ghi được tạo |  |
-| updated\_at | Thời điểm bản ghi được cập nhật gần nhất |  |
+| room_reservation_id | Mã dòng đặt phòng | PK |
+| contract_id | Hợp đồng facility | FK tới SEMINAR_FACILITY_CONTRACTS, NOT NULL, ON DELETE CASCADE |
+| room_name_spec | Tên/mã phòng hoặc mô tả phòng | NOT NULL |
+| seating_arrangement | Cách sắp xếp chỗ ngồi |  |
+| num_seats | Số ghế/chỗ ngồi | NOT NULL, >= 0 |
+| room_image_url | URL ảnh phòng |  |
 
-**MATERIAL\_REQUEST\_ITEM**
-
-Lưu từng dòng vật tư trong một yêu cầu gửi vật tư.
-
-| Attribute | Mô tả | Ràng buộc |
-| :---- | :---- | :---- |
-| material\_request\_id |  | PK, FK tới MATERIAL\_REQUEST |
-| material\_id |  | PK, FK tới MATERIAL |
-| requested\_quantity | Số lượng vật tư được yêu cầu gửi | \>0 |
-| notes | Ghi chú thêm cho dòng vật tư |  |
-
-**AUDIO\_VISUAL\_EQUIPMENT**
+## AUDIO_VISUAL_EQUIPMENT
 
 Lưu danh mục thiết bị nghe nhìn.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| equipment\_id |  | PK |
-| equipment\_name | Tên thiết bị |  |
-| equipment\_type | Loại thiết bị |  |
-| unit | Đơn vị tính |  |
+| equipment_id | Mã thiết bị | PK |
+| equipment_name | Tên thiết bị | NOT NULL |
+| equipment_type | Loại thiết bị | NOT NULL |
+| unit | Đơn vị tính | NOT NULL |
 
-**AV\_EQUIPMENT\_REQUIREMENT**
+## AV_EQUIPMENT_REQUIREMENT
 
 Lưu thiết bị AV mặc định cần cho từng loại seminar.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| equipment\_id |  | PK, FK đến AUDIO\_VISUAL\_EQUIPMENT  |
-| seminar\_type\_id |  | PK, FK đến SEMINAR\_TYPE |
-| quantity\_required | Số lượng thiết bị cần cho loại seminar. |  |
-| is\_depend\_on\_num\_participant | Số lượng thiết bị có phụ thuộc vào số lượng người tham gia không |  |
-| participant\_per\_quantity | Số lượng người sử dụng cho từng thiết bị | NULL nếu is\_depend\_on\_num\_participant \= false |
+| equipment_id | Thiết bị AV | PK, FK tới AUDIO_VISUAL_EQUIPMENT |
+| seminar_type_id | Loại seminar | PK, FK tới SEMINAR_TYPE |
+| quantity_required | Số lượng thiết bị cần | NOT NULL, > 0 |
+| is_depend_on_num_participant | Có phụ thuộc số người tham dự hay không | NOT NULL |
+| participant_per_quantity | Số người tương ứng mỗi đơn vị thiết bị | > 0 nếu is_depend_on_num_participant = true; NULL nếu false |
 
-**AV\_EQUIPMENT\_RESERVATION**
+## AV_EQUIPMENT_RESERVATIONS
 
-Lưu thiết bị AV thực tế được thuê trong hợp đồng với facility.
-
-| Attribute | Mô tả | Ràng buộc |
-| :---- | :---- | :---- |
-| contract\_id |  | PK, FK đến SEMINAR\_FACILITY\_CONTRACT  |
-| equipment\_id |  | PK, FK đến AUDIO\_VISUAL\_EQUIPMENT |
-| quantity\_reserved | Số lượng thiết bị đã được reserved |  |
-| cost\_for\_each\_equipment | Giá thuê cho mỗi equipment |  |
-
-**EMPLOYEE**
-
-Lưu các nhân viên trong bộ phận tổ chức.
+Lưu thiết bị AV thực tế được đặt/thuê trong hợp đồng với facility.
 
 | Attribute | Mô tả | Ràng buộc |
 | :---- | :---- | :---- |
-| employee\_id |  | PK  |
-| full\_name | Họ tên đầy đủ của nhân viên |  |
-| email | Email của nhân viên |  |
-| phone | SĐT của nhân viên |  |
-| role | Chức danh |  |
+| contract_id | Hợp đồng facility | PK, FK tới SEMINAR_FACILITY_CONTRACTS, ON DELETE CASCADE |
+| equipment_id | Thiết bị AV được đặt | PK, tham chiếu logic tới AUDIO_VISUAL_EQUIPMENT |
+| quantity_reserved | Số lượng thiết bị đã đặt | NOT NULL |
+| cost_for_each_equipment | Giá thuê mỗi thiết bị |  |
+
+## MATERIAL
+
+Lưu danh mục vật tư/tài liệu dùng cho seminar.
+
+| Attribute | Mô tả | Ràng buộc |
+| :---- | :---- | :---- |
+| material_id | Mã vật tư | PK |
+| material_name | Tên vật tư/tài liệu | NOT NULL |
+| material_type | Loại vật tư | NOT NULL |
+| description | Mô tả vật tư |  |
+| unit | Đơn vị tính | NOT NULL |
+
+## MATERIAL_REQUIREMENT
+
+Lưu danh sách vật tư mặc định cần cho từng loại seminar.
+
+| Attribute | Mô tả | Ràng buộc |
+| :---- | :---- | :---- |
+| seminar_type_id | Loại seminar | PK, FK tới SEMINAR_TYPE |
+| material_id | Vật tư | PK, FK tới MATERIAL |
+| default_quantity | Số lượng mặc định | NOT NULL, > 0 |
+| is_depend_on_num_participant | Có phụ thuộc số người tham dự hay không | NOT NULL |
+| participant_per_quantity | Số người tương ứng mỗi đơn vị vật tư | > 0 nếu is_depend_on_num_participant = true; NULL nếu false |
+| notes | Ghi chú yêu cầu vật tư |  |
+
+## MATERIAL_REQUEST
+
+Lưu phần thông tin chung của một yêu cầu gửi vật tư cho seminar.
+
+| Attribute | Mô tả | Ràng buộc |
+| :---- | :---- | :---- |
+| material_request_id | Mã yêu cầu vật tư | PK |
+| seminar_id | Seminar cần vật tư | FK tới SEMINAR, NOT NULL |
+| contract_id | Hợp đồng facility liên quan | NULL, tham chiếu logic tới SEMINAR_FACILITY_CONTRACTS |
+| request_date | Ngày tạo yêu cầu | NOT NULL |
+| needed_by_date | Ngày cần nhận vật tư | NOT NULL, >= request_date |
+| shipment_status | Trạng thái vận chuyển | NOT NULL, REQUESTED/PACKED/SHIPPED/DELIVERED |
+| delivered_confirmed_at | Thời điểm coordinator xác nhận đã nhận | NULL nếu chưa xác nhận |
+| delivery_confirmation_note | Ghi chú khi xác nhận giao hàng |  |
+| notes | Ghi chú thêm về yêu cầu/shipment |  |
+| created_at | Thời điểm tạo bản ghi | NOT NULL, default CURRENT_TIMESTAMP |
+| updated_at | Thời điểm cập nhật gần nhất | NOT NULL, default CURRENT_TIMESTAMP |
+
+## MATERIAL_REQUEST_ITEM
+
+Lưu từng dòng vật tư trong một yêu cầu gửi vật tư.
+
+| Attribute | Mô tả | Ràng buộc |
+| :---- | :---- | :---- |
+| material_request_id | Yêu cầu vật tư | PK, FK tới MATERIAL_REQUEST, ON DELETE CASCADE |
+| material_id | Vật tư được yêu cầu | PK, FK tới MATERIAL |
+| requested_quantity | Số lượng vật tư yêu cầu | NOT NULL, > 0 |
+| notes | Ghi chú cho dòng vật tư |  |
+
+## TRAVEL_ARRANGEMENTS
+
+Lưu thông tin sắp xếp di chuyển cho consultant.
+
+| Attribute | Mô tả | Ràng buộc |
+| :---- | :---- | :---- |
+| travel_arrangement_id | Mã sắp xếp di chuyển | PK |
+| seminar_id | Seminar liên quan | NOT NULL, tham chiếu logic tới SEMINAR |
+| consultant_id | Consultant di chuyển | NOT NULL, tham chiếu logic tới CONSULTANTS |
+| travel_agency_name | Tên đại lý du lịch hợp tác |  |
+| transport_mode | Phương thức di chuyển | NOT NULL, FLIGHT/TRAIN/BUS/CAR/OTHER |
+| carrier_name | Tên hãng vận chuyển |  |
+| service_number | Số chuyến bay/tàu/mã dịch vụ |  |
+| departure_location | Địa điểm khởi hành | NOT NULL |
+| arrival_location | Địa điểm đến | NOT NULL |
+| departure_time | Thời gian khởi hành | NOT NULL |
+| arrival_time | Thời gian đến | NOT NULL |
+| seat_info | Thông tin ghế |  |
+| cost | Chi phí di chuyển |  |
+| confirmation_sent_datetime | Thời điểm gửi xác nhận/lịch trình |  |
+| travel_arrangement_status | Trạng thái lịch trình | NOT NULL, BOOKED/CONFIRMED/CANCELLED, default BOOKED |
+
+## Tóm tắt quan hệ
+
+| Quan hệ | Kiểu | Ghi chú |
+| :---- | :---- | :---- |
+| USERS - CONSULTANTS | 1 - 0..1 | `consultants.user_id` là FK UNIQUE tới `users.user_id` |
+| SEMINAR_TYPE - SEMINAR | 1 - N | Mỗi seminar thuộc một seminar type |
+| CONSULTANTS - SEMINAR | 1 - N | Mỗi seminar có một consultant |
+| USERS - SEMINAR | 1 - N | `booking_department_user_id` là booking staff tạo seminar |
+| USERS - SEMINAR | 1 - N | `coordinator_user_id` là logistics coordinator được gán, có thể NULL |
+| FACILITIES - SEMINAR_FACILITY_CONTRACTS | 1 - N | Mỗi contract chọn một facility |
+| SEMINAR - SEMINAR_FACILITY_CONTRACTS | 1 - 0..1 | `seminar_id` UNIQUE, hiện là tham chiếu logic |
+| SEMINAR_FACILITY_CONTRACTS - FACILITY_ROOM_RESERVATIONS | 1 - N | Xóa contract sẽ xóa các room reservation |
+| SEMINAR_FACILITY_CONTRACTS - AV_EQUIPMENT_RESERVATIONS | 1 - N | Xóa contract sẽ xóa các AV reservation |
+| AUDIO_VISUAL_EQUIPMENT - AV_EQUIPMENT_RESERVATIONS | 1 - N | Hiện là tham chiếu logic qua `equipment_id` |
+| SEMINAR_TYPE - MATERIAL_REQUIREMENT | 1 - N | Bảng trung gian với MATERIAL |
+| MATERIAL - MATERIAL_REQUIREMENT | 1 - N | Bảng trung gian với SEMINAR_TYPE |
+| SEMINAR_TYPE - AV_EQUIPMENT_REQUIREMENT | 1 - N | Bảng trung gian với AUDIO_VISUAL_EQUIPMENT |
+| AUDIO_VISUAL_EQUIPMENT - AV_EQUIPMENT_REQUIREMENT | 1 - N | Bảng trung gian với SEMINAR_TYPE |
+| SEMINAR - MATERIAL_REQUEST | 1 - N | Mỗi material request thuộc một seminar |
+| MATERIAL_REQUEST - MATERIAL_REQUEST_ITEM | 1 - N | Xóa request sẽ xóa các item |
+| MATERIAL - MATERIAL_REQUEST_ITEM | 1 - N | Mỗi item chọn một material |
+| SEMINAR - TRAVEL_ARRANGEMENTS | 1 - N | Hiện là tham chiếu logic qua `seminar_id` |
+| CONSULTANTS - TRAVEL_ARRANGEMENTS | 1 - N | Hiện là tham chiếu logic qua `consultant_id` |

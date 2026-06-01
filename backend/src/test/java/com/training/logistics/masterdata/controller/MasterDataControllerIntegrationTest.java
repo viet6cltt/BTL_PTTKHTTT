@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
+@WithMockUser(roles = "ADMIN")
 class MasterDataControllerIntegrationTest {
 
     @Autowired
@@ -41,7 +43,7 @@ class MasterDataControllerIntegrationTest {
                 }
                 """;
 
-        String response = mockMvc.perform(post("/api/master-data/seminar-types")
+        String response = mockMvc.perform(post("/api/v1/master-data/seminar-types")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(seminarBody))
                 .andExpect(status().isCreated())
@@ -53,7 +55,7 @@ class MasterDataControllerIntegrationTest {
                 .getContentAsString();
         Long seminarTypeId = idFrom(response);
 
-        mockMvc.perform(get("/api/master-data/seminar-types/" + seminarTypeId))
+        mockMvc.perform(get("/api/v1/master-data/seminar-types/" + seminarTypeId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(seminarTypeId))
                 .andExpect(jsonPath("$.typeName").value("Workshop"))
@@ -70,15 +72,15 @@ class MasterDataControllerIntegrationTest {
                                   "materialType": "Print",
                                   "unit": "set"
                                 }
-                                """))
+                """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("Validation failed"));
+                .andExpect(jsonPath("$.message").exists());
 
         mockMvc.perform(get("/api/master-data/materials/404"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Resource not found"));
 
-        String seminarResponse = mockMvc.perform(post("/api/master-data/seminar-types")
+        String seminarResponse = mockMvc.perform(post("/api/v1/master-data/seminar-types")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

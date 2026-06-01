@@ -66,7 +66,7 @@ public class SeminarController {
     }
 
     @PutMapping("/{id}/assign-coordinator")
-    @PreAuthorize("hasAnyRole('BOOKING_STAFF', 'LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<SeminarResponse> assignCoordinator(
             @PathVariable Long id,
             @Valid @RequestBody AssignCoordinatorRequest request) {

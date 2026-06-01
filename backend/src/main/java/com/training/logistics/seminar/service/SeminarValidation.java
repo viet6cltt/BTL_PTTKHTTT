@@ -41,4 +41,10 @@ final class SeminarValidation {
             throw new BadRequestException("endDate must be on or after startDate");
         }
     }
+
+    static void requireFutureStartDate(LocalDate startDate) {
+        if (!startDate.isAfter(LocalDate.now())) {
+            throw new BadRequestException("startDate must be in the future");
+        }
+    }
 }

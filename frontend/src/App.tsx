@@ -6,42 +6,69 @@ import { CreateSeminarPage } from './pages/CreateSeminarPage'
 import { SeminarDetailPage } from './pages/SeminarDetailPage'
 import { MyTravelPage } from './pages/MyTravelPage'
 import { AllMaterialsPage } from './pages/AllMaterialsPage'
+import { MasterDataManagementPage } from './pages/MasterDataManagementPage'
+import { SeminarTypeDetailPage } from './pages/SeminarTypeDetailPage'
 import { Sidebar } from './components/layout/Sidebar'
 import { TopNavbar } from './components/layout/TopNavbar'
 
-export type TabType = 'LIST' | 'CREATE' | 'DETAIL' | 'MY_TRAVEL' | 'ALL_MATERIALS'
+export type TabType =
+  | 'LIST'
+  | 'CREATE'
+  | 'DETAIL'
+  | 'MY_TRAVEL'
+  | 'ALL_MATERIALS'
+  | 'MASTER_DATA'
+  | 'SEMINAR_TYPE_DETAIL'
 
 type AppRoute = {
   tab: TabType
   seminarId: number | null
+  seminarTypeId: number | null
 }
 
 function parseRoute(pathname: string): AppRoute {
   if (pathname === '/seminars/new') {
-    return { tab: 'CREATE', seminarId: null }
+    return { tab: 'CREATE', seminarId: null, seminarTypeId: null }
   }
 
   const seminarDetailMatch = pathname.match(/^\/seminars\/(\d+)$/)
   if (seminarDetailMatch) {
-    return { tab: 'DETAIL', seminarId: Number(seminarDetailMatch[1]) }
+    return { tab: 'DETAIL', seminarId: Number(seminarDetailMatch[1]), seminarTypeId: null }
   }
 
   if (pathname === '/my-travel') {
-    return { tab: 'MY_TRAVEL', seminarId: null }
+    return { tab: 'MY_TRAVEL', seminarId: null, seminarTypeId: null }
   }
 
   if (pathname === '/materials') {
-    return { tab: 'ALL_MATERIALS', seminarId: null }
+    return { tab: 'ALL_MATERIALS', seminarId: null, seminarTypeId: null }
   }
 
-  return { tab: 'LIST', seminarId: null }
+  const seminarTypeDetailMatch = pathname.match(/^\/master-data\/seminar-types\/(\d+)$/)
+  if (seminarTypeDetailMatch) {
+    return {
+      tab: 'SEMINAR_TYPE_DETAIL',
+      seminarId: null,
+      seminarTypeId: Number(seminarTypeDetailMatch[1]),
+    }
+  }
+
+  if (pathname === '/master-data') {
+    return { tab: 'MASTER_DATA', seminarId: null, seminarTypeId: null }
+  }
+
+  return { tab: 'LIST', seminarId: null, seminarTypeId: null }
 }
 
 function pathForRoute(route: AppRoute) {
   if (route.tab === 'CREATE') return '/seminars/new'
   if (route.tab === 'DETAIL' && route.seminarId !== null) return `/seminars/${route.seminarId}`
+  if (route.tab === 'SEMINAR_TYPE_DETAIL' && route.seminarTypeId !== null) {
+    return `/master-data/seminar-types/${route.seminarTypeId}`
+  }
   if (route.tab === 'MY_TRAVEL') return '/my-travel'
   if (route.tab === 'ALL_MATERIALS') return '/materials'
+  if (route.tab === 'MASTER_DATA') return '/master-data'
   return '/seminars'
 }
 
@@ -68,6 +95,11 @@ function AppContent() {
 
   const currentTab = route.tab
   const selectedSeminarId = route.seminarId
+  const selectedSeminarTypeId = route.seminarTypeId
+  const canCreateSeminar = user?.role === 'BOOKING_STAFF'
+  const canViewMasterData = Boolean(user)
+  const canModifyMasterData = user?.role === 'ADMIN'
+  const canViewMaterialRequests = user?.role === 'MATERIALS_STAFF'
 
   if (isLoading) {
     return (
@@ -84,19 +116,12 @@ function AppContent() {
     return <LoginPage />
   }
 
-  // Map sub-tabs to main labels in sidebar
-  let activeSidebarChild = 'Danh sách seminar'
-  if (currentTab === 'CREATE') activeSidebarChild = 'Tạo seminar mới'
-  else if (currentTab === 'MY_TRAVEL') activeSidebarChild = 'Lịch trình của tôi'
-  else if (currentTab === 'ALL_MATERIALS') activeSidebarChild = 'Quản lý tài liệu'
-
   return (
     <div className="min-h-screen bg-[#F5FAFF] font-sans text-[#18395F]">
       <Sidebar
-        activeChild={activeSidebarChild}
         currentTab={currentTab}
         onChangeTab={(tab) => {
-          navigate({ tab, seminarId: null })
+          navigate({ tab, seminarId: null, seminarTypeId: null })
         }}
       />
       <div className="lg:pl-[270px]">
@@ -107,20 +132,20 @@ function AppContent() {
             {currentTab === 'LIST' && (
               <SeminarListPage
                 onSelectSeminar={(id) => {
-                  navigate({ tab: 'DETAIL', seminarId: id })
+                  navigate({ tab: 'DETAIL', seminarId: id, seminarTypeId: null })
                 }}
                 onCreateSeminarClick={() => {
-                  navigate({ tab: 'CREATE', seminarId: null })
+                  navigate({ tab: 'CREATE', seminarId: null, seminarTypeId: null })
                 }}
               />
             )}
-            {currentTab === 'CREATE' && (
+            {currentTab === 'CREATE' && canCreateSeminar && (
               <CreateSeminarPage
                 onSaveSuccess={() => {
-                  navigate({ tab: 'LIST', seminarId: null })
+                  navigate({ tab: 'LIST', seminarId: null, seminarTypeId: null })
                 }}
                 onCancel={() => {
-                  navigate({ tab: 'LIST', seminarId: null })
+                  navigate({ tab: 'LIST', seminarId: null, seminarTypeId: null })
                 }}
               />
             )}
@@ -128,12 +153,43 @@ function AppContent() {
               <SeminarDetailPage
                 seminarId={selectedSeminarId}
                 onBack={() => {
-                  navigate({ tab: 'LIST', seminarId: null })
+                  navigate({ tab: 'LIST', seminarId: null, seminarTypeId: null })
                 }}
               />
             )}
             {currentTab === 'MY_TRAVEL' && <MyTravelPage />}
-            {currentTab === 'ALL_MATERIALS' && <AllMaterialsPage />}
+            {currentTab === 'ALL_MATERIALS' && canViewMaterialRequests && <AllMaterialsPage />}
+            {currentTab === 'MASTER_DATA' && canViewMasterData && (
+              <MasterDataManagementPage
+                onSelectSeminarType={(id) => {
+                  navigate({ tab: 'SEMINAR_TYPE_DETAIL', seminarId: null, seminarTypeId: id })
+                }}
+              />
+            )}
+            {currentTab === 'SEMINAR_TYPE_DETAIL' &&
+              selectedSeminarTypeId !== null &&
+              canViewMasterData && (
+                <SeminarTypeDetailPage
+                  seminarTypeId={selectedSeminarTypeId}
+                  canModifyMasterData={canModifyMasterData}
+                  onBack={() => {
+                    navigate({ tab: 'MASTER_DATA', seminarId: null, seminarTypeId: null })
+                  }}
+                />
+              )}
+            {((currentTab === 'CREATE' && !canCreateSeminar) ||
+              (currentTab === 'ALL_MATERIALS' && !canViewMaterialRequests) ||
+              ((currentTab === 'MASTER_DATA' || currentTab === 'SEMINAR_TYPE_DETAIL') &&
+                !canViewMasterData)) && (
+              <SeminarListPage
+                onSelectSeminar={(id) => {
+                  navigate({ tab: 'DETAIL', seminarId: id, seminarTypeId: null })
+                }}
+                onCreateSeminarClick={() => {
+                  navigate({ tab: 'CREATE', seminarId: null, seminarTypeId: null })
+                }}
+              />
+            )}
           </div>
         </main>
       </div>

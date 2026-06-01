@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,6 +38,7 @@ public class MaterialRequirementController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MaterialRequirementResponse> create(
             @PathVariable Long seminarTypeId,
             @Valid @RequestBody MaterialRequirementRequest request
@@ -53,6 +55,7 @@ public class MaterialRequirementController {
     }
 
     @PutMapping("/{materialId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public MaterialRequirementResponse update(
             @PathVariable Long seminarTypeId,
             @PathVariable Long materialId,
@@ -62,6 +65,7 @@ public class MaterialRequirementController {
     }
 
     @DeleteMapping("/{materialId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long seminarTypeId, @PathVariable Long materialId) {
         requirementService.delete(seminarTypeId, materialId);
         return ResponseEntity.noContent().build();

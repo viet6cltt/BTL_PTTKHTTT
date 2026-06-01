@@ -35,9 +35,14 @@ public class TravelArrangementService {
     private final TravelArrangementRepository travelArrangementRepository;
     private final ConsultantRepository consultantRepository;
     private final FacilityContractClient facilityContractClient;
+    private final com.training.logistics.seminar.service.SeminarService seminarService;
 
     @Transactional
     public TravelArrangementResponse createTravelArrangement(CreateTravelArrangementRequest request) {
+        if (request.getSeminarId() == null) {
+            throw new InvalidTravelArrangementException("seminarId is required");
+        }
+        verifySeminarCoordinator(request.getSeminarId());
         TravelArrangement arrangement = TravelArrangementMapper.toEntity(request);
         validateArrangementData(arrangement);
         return TravelArrangementMapper.toResponse(travelArrangementRepository.save(arrangement));
@@ -46,6 +51,7 @@ public class TravelArrangementService {
     @Transactional
     public TravelArrangementResponse updateTravelArrangement(Long travelArrangementId, UpdateTravelArrangementRequest request) {
         TravelArrangement arrangement = findArrangement(travelArrangementId);
+        verifySeminarCoordinator(arrangement.getSeminarId());
         if (arrangement.getTravelArrangementStatus() == TravelArrangementStatus.CANCELLED) {
             throw new InvalidTravelArrangementException("Cancelled travel arrangements cannot be updated");
         }
@@ -72,7 +78,9 @@ public class TravelArrangementService {
 
     @Transactional
     public void deleteTravelArrangement(Long travelArrangementId) {
-        travelArrangementRepository.delete(findArrangement(travelArrangementId));
+        TravelArrangement arrangement = findArrangement(travelArrangementId);
+        verifySeminarCoordinator(arrangement.getSeminarId());
+        travelArrangementRepository.delete(arrangement);
     }
 
     @Transactional(readOnly = true)
@@ -234,13 +242,26 @@ public class TravelArrangementService {
     }
 
     private void ensureCanChangeArrangementStatus(TravelArrangement arrangement) {
-        if (hasAnyRole("ROLE_ADMIN", "ROLE_LOGISTICS_COORDINATOR")) {
+        if (hasAnyRole("ROLE_LOGISTICS_COORDINATOR")) {
+            verifySeminarCoordinator(arrangement.getSeminarId());
             return;
         }
         if (hasAnyRole("ROLE_CONSULTANT") && Objects.equals(arrangement.getConsultantId(), getCurrentConsultantId())) {
             return;
         }
         throw new ForbiddenTravelAccessException("You cannot change this travel arrangement status");
+    }
+
+    private void verifySeminarCoordinator(Long seminarId) {
+        com.training.logistics.seminar.model.Seminar seminar = seminarService.findEntity(seminarId);
+        com.training.logistics.auth.model.User coordinator = seminar.getCoordinator();
+        if (coordinator == null) {
+            throw new com.training.logistics.common.exception.BadRequestException("This seminar has not been claimed by a coordinator yet");
+        }
+        Long currentUserId = getCurrentUserId();
+        if (!coordinator.getUserId().equals(currentUserId)) {
+            throw new com.training.logistics.common.exception.BadRequestException("Only the coordinator assigned to this seminar can perform this action");
+        }
     }
 
     private Long getCurrentConsultantId() {

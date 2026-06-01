@@ -17,7 +17,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Hà Nội',
     anticipatedRegistrants: 42,
     note: 'Ưu tiên phòng có không gian thảo luận nhóm.',
-    bookingCreatedDateTime: '2025-05-18',
+    bookingCreatedDateTime: '2025-05-18T00:00:00',
   },
   {
     id: 1002,
@@ -35,7 +35,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Đà Nẵng',
     anticipatedRegistrants: 35,
     note: null,
-    bookingCreatedDateTime: '2025-05-24',
+    bookingCreatedDateTime: '2025-05-24T00:00:00',
   },
   {
     id: 1003,
@@ -53,7 +53,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'TP. Hồ Chí Minh',
     anticipatedRegistrants: 28,
     note: 'Cần Internet ổn định và nhiều ổ cắm điện.',
-    bookingCreatedDateTime: '2025-06-02',
+    bookingCreatedDateTime: '2025-06-02T00:00:00',
   },
   {
     id: 1004,
@@ -71,7 +71,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Cần Thơ',
     anticipatedRegistrants: 50,
     note: null,
-    bookingCreatedDateTime: '2025-06-08',
+    bookingCreatedDateTime: '2025-06-08T00:00:00',
   },
   {
     id: 1005,
@@ -89,7 +89,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Bình Dương',
     anticipatedRegistrants: 64,
     note: 'Bố trí âm thanh đủ lớn cho hội trường.',
-    bookingCreatedDateTime: '2025-06-16',
+    bookingCreatedDateTime: '2025-06-16T00:00:00',
   },
   {
     id: 1006,
@@ -107,7 +107,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Hà Nội',
     anticipatedRegistrants: 31,
     note: null,
-    bookingCreatedDateTime: '2025-06-28',
+    bookingCreatedDateTime: '2025-06-28T00:00:00',
   },
   {
     id: 1007,
@@ -125,7 +125,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Đà Nẵng',
     anticipatedRegistrants: 24,
     note: 'Chuẩn bị phòng máy hoặc bàn rộng cho laptop.',
-    bookingCreatedDateTime: '2025-07-05',
+    bookingCreatedDateTime: '2025-07-05T00:00:00',
   },
   {
     id: 1008,
@@ -143,7 +143,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Hải Phòng',
     anticipatedRegistrants: 38,
     note: null,
-    bookingCreatedDateTime: '2025-07-18',
+    bookingCreatedDateTime: '2025-07-18T00:00:00',
   },
   {
     id: 1009,
@@ -161,7 +161,7 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'TP. Hồ Chí Minh',
     anticipatedRegistrants: 45,
     note: 'Cần micro không dây cho phần đóng vai.',
-    bookingCreatedDateTime: '2025-08-01',
+    bookingCreatedDateTime: '2025-08-01T00:00:00',
   },
   {
     id: 1010,
@@ -179,6 +179,6 @@ export const mockSeminars: SeminarResponse[] = [
     city: 'Hà Nội',
     anticipatedRegistrants: 56,
     note: null,
-    bookingCreatedDateTime: '2025-08-15',
+    bookingCreatedDateTime: '2025-08-15T00:00:00',
   },
 ]

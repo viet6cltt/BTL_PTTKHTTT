@@ -14,6 +14,8 @@ public interface SeminarClient {
 
     void markFacilitySecured(Long seminarId);
 
+    void verifyCoordinator(Long seminarId);
+
     /**
      * Tra ve so luong hoc vien du kien cua mot Seminar.
      * Dung de validate tong so cho ngoi phong hop phai du cho tat ca hoc vien.

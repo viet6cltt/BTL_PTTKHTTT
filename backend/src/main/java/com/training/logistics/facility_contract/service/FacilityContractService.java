@@ -45,6 +45,7 @@ public class FacilityContractService {
         if (!seminarClient.existsSeminarById(request.getSeminarId())) {
             throw new InvalidFacilityContractRequestException("Seminar does not exist");
         }
+        seminarClient.verifyCoordinator(request.getSeminarId());
         if (contractRepository.existsBySeminarIdAndStatusIn(request.getSeminarId(), ACTIVE_CONTRACT_STATUSES)) {
             throw new DuplicateFacilityContractException("Seminar already has an active facility contract");
         }
@@ -74,6 +75,7 @@ public class FacilityContractService {
         }
 
         SeminarFacilityContract contract = findContract(contractId);
+        seminarClient.verifyCoordinator(contract.getSeminarId());
         if (contract.getStatus() != ContractStatus.PENDING_NEGOTIATE) {
             throw new InvalidFacilityContractRequestException("Only PENDING_NEGOTIATE contracts can be approved");
         }
@@ -95,6 +97,7 @@ public class FacilityContractService {
     @Transactional
     public FacilityContractResponse rejectContract(Long contractId, RejectFacilityContractRequest request) {
         SeminarFacilityContract contract = findContract(contractId);
+        seminarClient.verifyCoordinator(contract.getSeminarId());
         if (contract.getStatus() == ContractStatus.APPROVED) {
             throw new InvalidFacilityContractRequestException("Approved contracts cannot be rejected");
         }

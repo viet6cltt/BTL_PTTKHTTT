@@ -34,7 +34,7 @@ public class FacilityContractController {
     private final MinioStorageService minioStorageService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<FacilityContractResponse> createContract(@Valid @RequestBody CreateFacilityContractRequest request) {
         return ResponseEntity.ok(facilityContractService.createContract(request));
     }
@@ -46,7 +46,7 @@ public class FacilityContractController {
     }
 
     @PutMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<FacilityContractResponse> approveContract(
             @PathVariable Long id,
             @RequestParam MultipartFile file,
@@ -56,7 +56,7 @@ public class FacilityContractController {
     }
 
     @PutMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<FacilityContractResponse> rejectContract(
             @PathVariable Long id,
             @Valid @RequestBody RejectFacilityContractRequest request) {

@@ -30,21 +30,21 @@ public class ReservationController {
     private final ReservationService reservationService;
 
     @PostMapping("/av-equipment")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<List<AvEquipmentReservationResponse>> saveAvEquipmentReservations(
             @Valid @RequestBody SaveAvEquipmentReservationsRequest request) {
         return ResponseEntity.ok(reservationService.saveAvEquipmentReservations(request));
     }
 
     @PostMapping("/rooms")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<RoomReservationResponse> createRoomReservation(
             @Valid @ModelAttribute CreateRoomReservationRequest request) {
         return ResponseEntity.ok(reservationService.createRoomReservation(request));
     }
 
     @PutMapping("/rooms/{roomReservationId}")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<RoomReservationResponse> updateRoomReservation(
             @PathVariable Long roomReservationId,
             @Valid @ModelAttribute UpdateRoomReservationRequest request) {
@@ -52,7 +52,7 @@ public class ReservationController {
     }
 
     @DeleteMapping("/rooms/{roomReservationId}")
-    @PreAuthorize("hasAnyRole('LOGISTICS_COORDINATOR', 'ADMIN')")
+    @PreAuthorize("hasRole('LOGISTICS_COORDINATOR')")
     public ResponseEntity<Void> deleteRoomReservation(@PathVariable Long roomReservationId) {
         reservationService.deleteRoomReservation(roomReservationId);
         return ResponseEntity.noContent().build();
