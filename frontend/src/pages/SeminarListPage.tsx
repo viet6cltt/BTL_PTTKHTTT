@@ -28,9 +28,8 @@ const PAGE_SIZE = 10
 const FINAL_SEMINAR_STATUSES: SeminarStatus[] = [
   'PENDING_LOGISTICS',
   'FACILITY_SECURED',
-  'TRAVEL_CONFIRMED',
+  'IN_PROGRESS',
   'READY_FOR_SEMINAR',
-  'OVERDUE',
 ]
 
 const cardClass = 'rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70'
@@ -61,8 +60,7 @@ const defaultFilters: FilterState = {
 }
 
 function isSeminarOverdueLocked(seminar: SeminarResponse) {
-  return seminar.status === 'OVERDUE' ||
-    (seminar.startDate < getTodayInputValue() && seminar.status !== 'READY_FOR_SEMINAR' && seminar.status !== 'CANCELLED')
+  return seminar.startDate < getTodayInputValue() && seminar.status !== 'READY_FOR_SEMINAR' && seminar.status !== 'CANCELLED'
 }
 
 function getTodayInputValue() {
@@ -163,9 +161,8 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
       { value: '', label: 'Tất cả trạng thái' },
       { value: 'PENDING_LOGISTICS', label: 'Chờ lên lịch Hậu cần' },
       { value: 'FACILITY_SECURED', label: 'Đã thuê Khách sạn' },
-      { value: 'TRAVEL_CONFIRMED', label: 'Đã chốt Vé xe/máy bay' },
+      { value: 'IN_PROGRESS', label: 'Đang chuẩn bị song song' },
       { value: 'READY_FOR_SEMINAR', label: 'Sẵn sàng tổ chức' },
-      { value: 'OVERDUE', label: 'Quá hạn xử lý' },
     ]
 
     if (user?.role === 'ADMIN') {
@@ -182,7 +179,7 @@ export function SeminarListPage({ onSelectSeminar, onCreateSeminarClick }: Semin
           matchesCoordinatorScope(seminar, coordinatorScope, user?.userId) &&
           matchesFilters(seminar, filters),
       )
-      // Sort OVERDUE to the top
+      // Sort overdue seminars to the top.
       return [...filtered].sort((a, b) => {
         const aOverdue = isSeminarOverdueLocked(a)
         const bOverdue = isSeminarOverdueLocked(b)
@@ -530,19 +527,17 @@ function SeminarRow({ seminar, onClick, onClaim }: SeminarRowProps) {
   const statusLabels: Record<string, string> = {
     PENDING_LOGISTICS: 'Chờ điều phối',
     FACILITY_SECURED: 'Đã đặt địa điểm',
-    TRAVEL_CONFIRMED: 'Đã duyệt di chuyển',
+    IN_PROGRESS: 'Đang chuẩn bị',
     READY_FOR_SEMINAR: 'Sẵn sàng tổ chức',
     CANCELLED: 'Đã hủy',
-    OVERDUE: 'Quá hạn xử lý',
   }
 
   const statusStyles: Record<string, string> = {
     PENDING_LOGISTICS: 'bg-amber-50 text-amber-700 border-amber-200/60',
     FACILITY_SECURED: 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
-    TRAVEL_CONFIRMED: 'bg-purple-50 text-purple-700 border-purple-200/60',
+    IN_PROGRESS: 'bg-purple-50 text-purple-700 border-purple-200/60',
     READY_FOR_SEMINAR: 'bg-teal-50 text-teal-700 border-teal-200/60',
     CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200/60',
-    OVERDUE: 'bg-rose-50 text-rose-700 border-rose-200/60',
   }
 
   const isOverdue = isSeminarOverdueLocked(seminar)
@@ -582,12 +577,12 @@ function SeminarRow({ seminar, onClick, onClaim }: SeminarRowProps) {
         {seminar.anticipatedRegistrants}
       </td>
       <td className={`${tableCellClass} text-sm font-semibold text-slate-600`}>
-        <span className={seminar.status === 'OVERDUE' ? 'font-black text-rose-700' : ''}>
+        <span className={isOverdue ? 'font-black text-rose-700' : ''}>
           {seminar.coordinatorFullName || (
             <span className="font-bold text-amber-600">Chưa nhận</span>
           )}
         </span>
-        {seminar.status === 'OVERDUE' && (
+        {isOverdue && (
           <p className="mt-1 text-[10px] font-black uppercase tracking-wide text-rose-500">
             Phụ trách quá hạn
           </p>

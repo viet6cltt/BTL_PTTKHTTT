@@ -20,6 +20,7 @@ import com.training.logistics.materialrequest.repository.MaterialRequestReposito
 import com.training.logistics.seminar.model.Seminar;
 import com.training.logistics.seminar.model.SeminarStatus;
 import com.training.logistics.seminar.repository.SeminarRepository;
+import com.training.logistics.seminar.service.SeminarService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -43,17 +44,20 @@ public class MaterialRequestService {
     private final SeminarRepository seminarRepository;
     private final MaterialRepository materialRepository;
     private final MaterialRequirementRepository materialRequirementRepository;
+    private final SeminarService seminarService;
 
     public MaterialRequestService(
             MaterialRequestRepository materialRequestRepository,
             SeminarRepository seminarRepository,
             MaterialRepository materialRepository,
-            MaterialRequirementRepository materialRequirementRepository
+            MaterialRequirementRepository materialRequirementRepository,
+            SeminarService seminarService
     ) {
         this.materialRequestRepository = materialRequestRepository;
         this.seminarRepository = seminarRepository;
         this.materialRepository = materialRepository;
         this.materialRequirementRepository = materialRequirementRepository;
+        this.seminarService = seminarService;
     }
 
     @Transactional(readOnly = true)
@@ -105,7 +109,9 @@ public class MaterialRequestService {
         }
         items.forEach(materialRequest::addItem);
 
-        return toResponse(materialRequestRepository.save(materialRequest));
+        MaterialRequest savedRequest = materialRequestRepository.saveAndFlush(materialRequest);
+        seminarService.reevaluatePreparationStatus(seminarId);
+        return toResponse(savedRequest);
     }
 
     public MaterialRequestResponse updateShipmentStatus(Long id, UpdateShipmentStatusRequest request) {
@@ -119,7 +125,9 @@ public class MaterialRequestService {
         }
 
         materialRequest.setShipmentStatus(newStatus);
-        return toResponse(materialRequestRepository.saveAndFlush(materialRequest));
+        MaterialRequest savedRequest = materialRequestRepository.saveAndFlush(materialRequest);
+        seminarService.reevaluatePreparationStatus(savedRequest.getSeminar().getId());
+        return toResponse(savedRequest);
     }
 
     public MaterialRequestResponse confirmDelivered(Long id, ConfirmDeliveryRequest request) {
@@ -133,7 +141,9 @@ public class MaterialRequestService {
         materialRequest.setDeliveredConfirmedAt(LocalDateTime.now());
         materialRequest.setDeliveryConfirmationNote(request.note());
 
-        return toResponse(materialRequestRepository.saveAndFlush(materialRequest));
+        MaterialRequest savedRequest = materialRequestRepository.saveAndFlush(materialRequest);
+        seminarService.reevaluatePreparationStatus(savedRequest.getSeminar().getId());
+        return toResponse(savedRequest);
     }
 
     private List<MaterialRequestItem> buildItemsFromRequirements(Seminar seminar) {
@@ -210,8 +220,7 @@ public class MaterialRequestService {
     }
 
     private void ensureCurrentCoordinatorOwnsSeminar(Seminar seminar) {
-        if (seminar.getStatus() == SeminarStatus.OVERDUE
-                || seminar.getStartDate().isBefore(LocalDate.now()) && !CLOSED_SEMINAR_STATUSES.contains(seminar.getStatus())) {
+        if (seminar.getStartDate().isBefore(LocalDate.now()) && !CLOSED_SEMINAR_STATUSES.contains(seminar.getStatus())) {
             throw new ConflictException("Seminar is overdue and no longer editable by coordinator");
         }
         if (seminar.getCoordinator() == null) {

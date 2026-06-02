@@ -16,7 +16,7 @@ import {
   UserPlus,
   User,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   api,
   type CreateUserRequest,
@@ -74,6 +74,7 @@ export function CreateUserPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [isLoadingConsultantProfile, setIsLoadingConsultantProfile] = useState(false)
   const [isUploadingConsultantAvatar, setIsUploadingConsultantAvatar] = useState(false)
+  const consultantAvatarInputRef = useRef<HTMLInputElement | null>(null)
 
   const roleStats = useMemo(
     () =>
@@ -435,6 +436,7 @@ export function CreateUserPage() {
           {editingUser.role === 'CONSULTANT' && (
             <ConsultantAvatarAdminPanel
               consultant={editingConsultantProfile}
+              inputRef={consultantAvatarInputRef}
               isLoading={isLoadingConsultantProfile}
               isUploading={isUploadingConsultantAvatar}
               onAvatarChange={handleConsultantAvatarChange}
@@ -515,15 +517,19 @@ function CreateUserPanel({
 
 function ConsultantAvatarAdminPanel({
   consultant,
+  inputRef,
   isLoading,
   isUploading,
   onAvatarChange,
 }: {
   consultant: ConsultantResponse | null
+  inputRef: React.RefObject<HTMLInputElement | null>
   isLoading: boolean
   isUploading: boolean
   onAvatarChange: (event: React.ChangeEvent<HTMLInputElement>) => void
 }) {
+  const isDisabled = isLoading || isUploading || !consultant
+
   return (
     <div className="mb-5 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4">
       <div className="flex items-center gap-4">
@@ -554,21 +560,23 @@ function ConsultantAvatarAdminPanel({
           </p>
         </div>
 
-        <label
-          className={`inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#0B3970] px-4 text-xs font-black text-white transition hover:bg-[#126CB0] ${
-            isLoading || isUploading || !consultant ? 'pointer-events-none opacity-60' : ''
-          }`}
+        <button
+          type="button"
+          disabled={isDisabled}
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0B3970] px-4 text-xs font-black text-white transition hover:bg-[#126CB0] disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Camera className="h-4 w-4" />
-          {isUploading ? 'Đang upload...' : 'Upload ảnh'}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={isLoading || isUploading || !consultant}
-            onChange={onAvatarChange}
-          />
-        </label>
+          {isLoading ? 'Đang tải...' : isUploading ? 'Đang upload...' : 'Upload ảnh'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={isDisabled}
+          onChange={onAvatarChange}
+        />
       </div>
     </div>
   )

@@ -4,6 +4,8 @@ const API_BASE_URL = `${API_ROOT_URL}/api/v1`
 export type UserRole = 'BOOKING_STAFF' | 'LOGISTICS_COORDINATOR' | 'CONSULTANT' | 'MATERIALS_STAFF' | 'ADMIN'
 export type UserStatus = 'ACTIVE' | 'DISABLED'
 export type TravelArrangementStatus = 'BOOKED' | 'CONFIRMED' | 'CANCELLED'
+export type FacilityContractStatus = 'PENDING_NEGOTIATE' | 'APPROVED' | 'REJECTED'
+export type MaterialShipmentStatus = 'REQUESTED' | 'PACKED' | 'SHIPPED' | 'DELIVERED'
 
 export interface AuthResponse {
   accessToken: string
@@ -40,7 +42,17 @@ export interface UserResponse {
   createdAt: string
 }
 
-export type SeminarStatus = 'PENDING_LOGISTICS' | 'FACILITY_SECURED' | 'TRAVEL_CONFIRMED' | 'READY_FOR_SEMINAR' | 'CANCELLED' | 'OVERDUE'
+export type SeminarStatus = 'PENDING_LOGISTICS' | 'FACILITY_SECURED' | 'IN_PROGRESS' | 'READY_FOR_SEMINAR' | 'CANCELLED'
+
+export interface SeminarPreparationChecklist {
+  facilityContractStatus: FacilityContractStatus | null
+  travelArrangementStatus: TravelArrangementStatus | null
+  materialShipmentStatus: MaterialShipmentStatus | null
+  facilitySecured: boolean
+  travelConfirmed: boolean
+  materialsDelivered: boolean
+  readyForSeminar: boolean
+}
 
 export interface SeminarResponse {
   id: number
@@ -59,6 +71,7 @@ export interface SeminarResponse {
   city: string
   anticipatedRegistrants: number
   status: SeminarStatus
+  preparationChecklist: SeminarPreparationChecklist
   note: string | null
   bookingCreatedDateTime: string
 }

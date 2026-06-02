@@ -21,6 +21,87 @@ const LIVE_OVERDUE_NOTIFICATION_KEY = 'live_overdue_notification_seminar_3_sent'
 const LIVE_OVERDUE_NOTIFICATION_TITLE = 'CẢNH BÁO: Thêm 1 Seminar quá hạn mới!'
 const LIVE_OVERDUE_NOTIFICATION_BODY =
   'Hệ thống quét phát hiện Seminar #3 "Quản trị rủi ro chuỗi cung ứng" đã quá hạn xử lý địa điểm giảng dạy!'
+const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
+  {
+    id: '1',
+    title: 'CẢNH BÁO: Quá hạn phân công điều phối!',
+    body: 'Seminar #1 "Kỹ năng bán hàng và đàm phán" đã quá hạn xử lý công tác hậu cần (quá 5 ngày quy định). Vui lòng phân công ngay!',
+    timestamp: '3 phút trước',
+    type: 'overdue',
+    isRead: false,
+    role: 'LOGISTICS_COORDINATOR',
+    link: { tab: 'DETAIL', seminarId: 1 }
+  },
+  {
+    id: '2',
+    title: 'Hợp đồng phòng học đang chờ duyệt giá',
+    body: 'Hợp đồng thuê hội trường ZZZ (Seminar #3) đã được tải lên bản nháp. Đang chờ điều phối viên rà soát duyệt giá trị hợp đồng.',
+    timestamp: '2 giờ trước',
+    type: 'contract',
+    isRead: false,
+    role: 'LOGISTICS_COORDINATOR',
+    link: { tab: 'DETAIL', seminarId: 3 }
+  },
+  {
+    id: '3',
+    title: 'Chuyên gia xác nhận lịch trình',
+    body: 'Chuyên gia Lê Minh Tuấn đã xác nhận thành công vé máy bay chặng đi Hà Nội cho Seminar #1.',
+    timestamp: '1 ngày trước',
+    type: 'travel',
+    isRead: true,
+    role: 'LOGISTICS_COORDINATOR',
+    link: { tab: 'DETAIL', seminarId: 1 }
+  },
+  {
+    id: '4',
+    title: 'Nhân viên vật tư hoàn thành giao nhận',
+    body: 'Nhân viên vật tư đã cập nhật trạng thái "Hoàn thành chuẩn bị vật tư" cho Seminar #1.',
+    timestamp: '2 ngày trước',
+    type: 'material',
+    isRead: true,
+    role: 'LOGISTICS_COORDINATOR',
+    link: { tab: 'DETAIL', seminarId: 1 }
+  },
+  {
+    id: 'c1',
+    title: 'Yêu cầu xác nhận chặng di chuyển mới',
+    body: 'Phòng hậu cần đã đặt vé máy bay chặng đi Hà Nội cho bạn (Seminar #1). Vui lòng kiểm tra và xác nhận chặng đi.',
+    timestamp: '5 phút trước',
+    type: 'travel',
+    isRead: false,
+    role: 'CONSULTANT',
+    link: { tab: 'MY_TRAVEL' }
+  },
+  {
+    id: 'c2',
+    title: 'Phòng lưu trú đã đặt thành công',
+    body: 'Phòng họp tại facility Mường Thanh Hà Nội đã được giữ chỗ từ ngày 31/05 - 01/06.',
+    timestamp: '4 giờ trước',
+    type: 'contract',
+    isRead: false,
+    role: 'CONSULTANT',
+    link: { tab: 'MY_TRAVEL' }
+  },
+  {
+    id: 'g1',
+    title: 'Chào mừng bạn trở lại',
+    body: 'Chúc bạn có một ngày làm việc hiệu quả và quản lý lớp học tối ưu!',
+    timestamp: 'Vừa xong',
+    type: 'general',
+    isRead: false,
+    role: 'ALL',
+    link: { tab: 'LIST' }
+  }
+]
+
+function loadNotificationsForRole(role: string): NotificationItem[] {
+  const raw = localStorage.getItem('app_notifications')
+  const parsed = raw ? JSON.parse(raw) as NotificationItem[] : DEFAULT_NOTIFICATIONS
+  if (!raw) {
+    localStorage.setItem('app_notifications', JSON.stringify(DEFAULT_NOTIFICATIONS))
+  }
+  return parsed.filter(n => n.role === 'ALL' || n.role === role)
+}
 
 export function TopNavbar() {
   const { user, logout } = useAuth()
@@ -30,6 +111,7 @@ export function TopNavbar() {
   const [toastMsg, setToastMsg] = useState<string | null>(null)
 
   if (!user) return null
+  const userRole = user.role
 
   // Format display roles nicely
   const displayRoles: Record<string, string> = {
@@ -42,107 +124,28 @@ export function TopNavbar() {
 
   // Initialize role-specific notifications
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const raw = localStorage.getItem('app_notifications')
-    if (raw) {
-      const parsed = JSON.parse(raw) as NotificationItem[]
-      return parsed.filter(n => n.role === 'ALL' || n.role === user.role)
-    }
-    
-    // Default list
-    const defaults: NotificationItem[] = [
-      {
-        id: '1',
-        title: 'CẢNH BÁO: Quá hạn phân công điều phối!',
-        body: 'Seminar #1 "Kỹ năng bán hàng và đàm phán" đã quá hạn xử lý công tác hậu cần (quá 5 ngày quy định). Vui lòng phân công ngay!',
-        timestamp: '3 phút trước',
-        type: 'overdue',
-        isRead: false,
-        role: 'LOGISTICS_COORDINATOR',
-        link: { tab: 'DETAIL', seminarId: 1 }
-      },
-      {
-        id: '2',
-        title: 'Hợp đồng phòng học đang chờ duyệt giá',
-        body: 'Hợp đồng thuê hội trường ZZZ (Seminar #3) đã được tải lên bản nháp. Đang chờ điều phối viên rà soát duyệt giá trị hợp đồng.',
-        timestamp: '2 giờ trước',
-        type: 'contract',
-        isRead: false,
-        role: 'LOGISTICS_COORDINATOR',
-        link: { tab: 'DETAIL', seminarId: 3 }
-      },
-      {
-        id: '3',
-        title: 'Chuyên gia xác nhận lịch trình',
-        body: 'Chuyên gia Lê Minh Tuấn đã xác nhận thành công vé máy bay chặng đi Hà Nội cho Seminar #1.',
-        timestamp: '1 ngày trước',
-        type: 'travel',
-        isRead: true,
-        role: 'LOGISTICS_COORDINATOR',
-        link: { tab: 'DETAIL', seminarId: 1 }
-      },
-      {
-        id: '4',
-        title: 'Nhân viên vật tư hoàn thành giao nhận',
-        body: 'Nhân viên vật tư đã cập nhật trạng thái "Hoàn thành chuẩn bị vật tư" cho Seminar #1.',
-        timestamp: '2 ngày trước',
-        type: 'material',
-        isRead: true,
-        role: 'LOGISTICS_COORDINATOR',
-        link: { tab: 'DETAIL', seminarId: 1 }
-      },
-      {
-        id: 'c1',
-        title: 'Yêu cầu xác nhận chặng di chuyển mới',
-        body: 'Phòng hậu cần đã đặt vé máy bay chặng đi Hà Nội cho bạn (Seminar #1). Vui lòng kiểm tra và xác nhận chặng đi.',
-        timestamp: '5 phút trước',
-        type: 'travel',
-        isRead: false,
-        role: 'CONSULTANT',
-        link: { tab: 'MY_TRAVEL' }
-      },
-      {
-        id: 'c2',
-        title: 'Phòng lưu trú đã đặt thành công',
-        body: 'Phòng họp tại facility Mường Thanh Hà Nội đã được giữ chỗ từ ngày 31/05 - 01/06.',
-        timestamp: '4 giờ trước',
-        type: 'contract',
-        isRead: false,
-        role: 'CONSULTANT',
-        link: { tab: 'MY_TRAVEL' }
-      },
-      {
-        id: 'g1',
-        title: 'Chào mừng bạn trở lại',
-        body: 'Chúc bạn có một ngày làm việc hiệu quả và quản lý lớp học tối ưu!',
-        timestamp: 'Vừa xong',
-        type: 'general',
-        isRead: false,
-        role: 'ALL',
-        link: { tab: 'LIST' }
-      }
-    ]
-    localStorage.setItem('app_notifications', JSON.stringify(defaults))
-    return defaults.filter(n => n.role === 'ALL' || n.role === user.role)
+    return loadNotificationsForRole(userRole)
   })
 
   // Listen for changes in localStorage notifications
   useEffect(() => {
     function handleUpdate() {
-      if (!user) return
-      const raw = localStorage.getItem('app_notifications')
-      if (raw) {
-        const parsed = JSON.parse(raw) as NotificationItem[]
-        const filtered = parsed.filter(n => n.role === 'ALL' || n.role === user.role)
-        setNotifications(filtered)
-      }
+      setNotifications(loadNotificationsForRole(userRole))
     }
+    handleUpdate()
     window.addEventListener('notifications-updated', handleUpdate)
-    return () => window.removeEventListener('notifications-updated', handleUpdate)
-  }, [user?.role])
+    window.addEventListener('storage', handleUpdate)
+    window.addEventListener('focus', handleUpdate)
+    return () => {
+      window.removeEventListener('notifications-updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+      window.removeEventListener('focus', handleUpdate)
+    }
+  }, [userRole])
 
   // Simulated live event feed (adds dynamic feel to the app)
   useEffect(() => {
-    if (user.role !== 'LOGISTICS_COORDINATOR' && user.role !== 'ADMIN') return
+    if (userRole !== 'LOGISTICS_COORDINATOR' && userRole !== 'ADMIN') return
     if (localStorage.getItem(LIVE_OVERDUE_NOTIFICATION_KEY) === 'true') return
 
     const raw = localStorage.getItem('app_notifications')
@@ -173,7 +176,7 @@ export function TopNavbar() {
     }, 20000)
 
     return () => clearTimeout(timer)
-  }, [user.role])
+  }, [userRole])
 
   // Clear toast after 5 seconds
   useEffect(() => {

@@ -60,11 +60,11 @@ public class ConsultantService {
         return toResponse(consultant);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ConsultantResponse getConsultantByUserId(Long userId) {
-        Consultant consultant = consultantRepository.findByUserUserId(userId)
-                .orElseThrow(() -> new TravelArrangementNotFoundException("Consultant not found for user"));
-        return toResponse(consultant);
+        return consultantRepository.findByUserUserId(userId)
+                .map(this::toResponse)
+                .orElseGet(() -> createBlankProfile(userId));
     }
 
     @Transactional

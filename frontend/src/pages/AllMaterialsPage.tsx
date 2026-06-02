@@ -151,7 +151,7 @@ export function AllMaterialsPage() {
                           onClick={() => handleStatusUpdate(r.id, 'PACKED')}
                           className="rounded bg-amber-500 px-3.5 py-2 text-xs font-black text-white hover:bg-amber-600 transition shadow-sm"
                         >
-                          Xác nhận đóng gói xong (PACKED)
+                          Cập nhật: Đã đóng gói (PACKED)
                         </button>
                       )}
                       {r.shipmentStatus === 'PACKED' && (
@@ -160,7 +160,7 @@ export function AllMaterialsPage() {
                           onClick={() => handleStatusUpdate(r.id, 'SHIPPED')}
                           className="rounded bg-indigo-500 px-3.5 py-2 text-xs font-black text-white hover:bg-indigo-600 transition shadow-sm"
                         >
-                          Giao cho đối tác Viettel Post (SHIPPED)
+                          Cập nhật: Đang vận chuyển (SHIPPED)
                         </button>
                       )}
                       {r.shipmentStatus === 'SHIPPED' && (

@@ -6,6 +6,9 @@ import com.training.logistics.auth.repository.UserRepository;
 import com.training.logistics.common.exception.BadRequestException;
 import com.training.logistics.common.exception.ConflictException;
 import com.training.logistics.common.exception.ResourceNotFoundException;
+import com.training.logistics.facility_contract.model.ContractStatus;
+import com.training.logistics.facility_contract.model.SeminarFacilityContract;
+import com.training.logistics.facility_contract.repository.SeminarFacilityContractRepository;
 import com.training.logistics.masterdata.model.AudioVisualEquipment;
 import com.training.logistics.masterdata.model.AvEquipmentRequirement;
 import com.training.logistics.masterdata.model.Material;
@@ -14,19 +17,26 @@ import com.training.logistics.masterdata.model.SeminarType;
 import com.training.logistics.masterdata.repository.AvEquipmentRequirementRepository;
 import com.training.logistics.masterdata.repository.MaterialRequirementRepository;
 import com.training.logistics.masterdata.repository.SeminarTypeRepository;
+import com.training.logistics.materialrequest.model.MaterialRequest;
+import com.training.logistics.materialrequest.model.ShipmentStatus;
+import com.training.logistics.materialrequest.repository.MaterialRequestRepository;
 import com.training.logistics.seminar.dto.request.AssignCoordinatorRequest;
 import com.training.logistics.seminar.dto.request.SeminarCreateRequest;
 import com.training.logistics.seminar.dto.request.SeminarUpdateRequest;
 import com.training.logistics.seminar.dto.request.UpdateSeminarStatusRequest;
 import com.training.logistics.seminar.dto.response.CalculatedAvEquipmentRequirementResponse;
 import com.training.logistics.seminar.dto.response.CalculatedMaterialRequirementResponse;
+import com.training.logistics.seminar.dto.response.SeminarPreparationChecklistResponse;
 import com.training.logistics.seminar.dto.response.SeminarRequirementsPreviewResponse;
 import com.training.logistics.seminar.dto.response.SeminarResponse;
 import com.training.logistics.seminar.model.Seminar;
 import com.training.logistics.seminar.model.SeminarStatus;
 import com.training.logistics.seminar.repository.SeminarRepository;
 import com.training.logistics.travel.model.Consultant;
+import com.training.logistics.travel.model.TravelArrangement;
+import com.training.logistics.travel.model.TravelArrangementStatus;
 import com.training.logistics.travel.repository.ConsultantRepository;
+import com.training.logistics.travel.repository.TravelArrangementRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -45,40 +55,40 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional
 public class SeminarService {
-    private static final List<SeminarStatus> FINAL_SEMINAR_STATUSES = List.of(
+    private static final List<SeminarStatus> VISIBLE_SEMINAR_STATUSES = List.of(
             SeminarStatus.PENDING_LOGISTICS,
             SeminarStatus.FACILITY_SECURED,
-            SeminarStatus.TRAVEL_CONFIRMED,
+            SeminarStatus.IN_PROGRESS,
             SeminarStatus.READY_FOR_SEMINAR,
-            SeminarStatus.OVERDUE
+            SeminarStatus.CANCELLED
     );
     private static final List<SeminarStatus> CLOSED_SEMINAR_STATUSES = List.of(
             SeminarStatus.READY_FOR_SEMINAR,
             SeminarStatus.CANCELLED
     );
-    private static final List<SeminarStatus> OVERDUE_EXCLUDED_STATUSES = List.of(
-            SeminarStatus.READY_FOR_SEMINAR,
-            SeminarStatus.CANCELLED,
-            SeminarStatus.OVERDUE
-    );
 
     private final SeminarRepository seminarRepository;
+    private final SeminarFacilityContractRepository seminarFacilityContractRepository;
     private final SeminarTypeRepository seminarTypeRepository;
     private final ConsultantRepository consultantRepository;
     private final UserRepository userRepository;
     private final MaterialRequirementRepository materialRequirementRepository;
     private final AvEquipmentRequirementRepository avEquipmentRequirementRepository;
+    private final TravelArrangementRepository travelArrangementRepository;
+    private final MaterialRequestRepository materialRequestRepository;
 
     public Page<SeminarResponse> search(SeminarStatus status, String city, Long coordinatorId, Pageable pageable) {
         UserRole currentRole = requireCurrentUser().getRole();
-        refreshOverdueSeminars();
         return seminarRepository.findAll(buildSpecification(status, city, coordinatorId, currentRole), pageable)
-                .map(this::toResponse);
+                .map(seminar -> {
+                    reevaluatePreparationStatus(seminar);
+                    return toResponse(seminar);
+                });
     }
 
     public SeminarResponse getById(Long id) {
-        refreshOverdueSeminars();
         Seminar seminar = findEntity(id);
+        reevaluatePreparationStatus(seminar);
         ensureVisibleForCurrentUser(seminar);
         return toResponse(seminar);
     }
@@ -151,6 +161,9 @@ public class SeminarService {
     }
 
     public SeminarResponse updateStatus(Long id, UpdateSeminarStatusRequest request) {
+        if (request.status() == SeminarStatus.READY_FOR_SEMINAR) {
+            throw new BadRequestException("READY_FOR_SEMINAR is computed automatically from preparation checklist");
+        }
         Seminar seminar = findEntity(id);
         seminar.setStatus(request.status());
         return toResponse(seminar);
@@ -158,7 +171,10 @@ public class SeminarService {
 
     public void markFacilitySecured(Long id) {
         Seminar seminar = findEntity(id);
-        seminar.setStatus(SeminarStatus.FACILITY_SECURED);
+        if (seminar.getStatus() != SeminarStatus.CANCELLED) {
+            seminar.setStatus(SeminarStatus.FACILITY_SECURED);
+            reevaluatePreparationStatus(seminar);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -173,7 +189,7 @@ public class SeminarService {
     }
 
     public void ensureOpenForCoordinatorWork(Seminar seminar) {
-        if (seminar.getStatus() == SeminarStatus.OVERDUE || isPastUnclosed(seminar)) {
+        if (isPastUnclosed(seminar)) {
             throw new BadRequestException("Seminar is overdue and no longer editable by coordinator");
         }
     }
@@ -183,8 +199,94 @@ public class SeminarService {
                 && !CLOSED_SEMINAR_STATUSES.contains(seminar.getStatus());
     }
 
-    private void refreshOverdueSeminars() {
-        seminarRepository.markOverdueSeminars(LocalDate.now(), OVERDUE_EXCLUDED_STATUSES);
+    public void reevaluatePreparationStatus(Long seminarId) {
+        reevaluatePreparationStatus(findEntity(seminarId));
+    }
+
+    public void reevaluatePreparationStatus(Seminar seminar) {
+        if (seminar.getStatus() == SeminarStatus.CANCELLED) {
+            return;
+        }
+
+        PreparationSnapshot snapshot = buildPreparationSnapshot(seminar.getId());
+        if (snapshot.readyForSeminar()) {
+            seminar.setStatus(SeminarStatus.READY_FOR_SEMINAR);
+            return;
+        }
+
+        if (seminar.getStatus() == SeminarStatus.READY_FOR_SEMINAR && !snapshot.readyForSeminar()) {
+            seminar.setStatus(snapshot.facilitySecured() ? SeminarStatus.IN_PROGRESS : SeminarStatus.PENDING_LOGISTICS);
+            return;
+        }
+
+        if (!snapshot.facilitySecured()) {
+            seminar.setStatus(SeminarStatus.PENDING_LOGISTICS);
+            return;
+        }
+
+        if (snapshot.travelArrangementStatus() != null || snapshot.materialShipmentStatus() != null) {
+            seminar.setStatus(SeminarStatus.IN_PROGRESS);
+            return;
+        }
+
+        seminar.setStatus(SeminarStatus.FACILITY_SECURED);
+    }
+
+    private PreparationSnapshot buildPreparationSnapshot(Long seminarId) {
+        ContractStatus facilityContractStatus = seminarFacilityContractRepository.findBySeminarId(seminarId)
+                .map(SeminarFacilityContract::getStatus)
+                .orElse(null);
+        TravelArrangementStatus travelArrangementStatus = aggregateTravelStatus(
+                travelArrangementRepository.findBySeminarId(seminarId)
+        );
+        ShipmentStatus materialShipmentStatus = aggregateMaterialStatus(
+                materialRequestRepository.findBySeminar_IdOrderByCreatedAtDescIdDesc(seminarId)
+        );
+        boolean facilitySecured = facilityContractStatus == ContractStatus.APPROVED;
+        boolean travelConfirmed = travelArrangementStatus == TravelArrangementStatus.CONFIRMED;
+        boolean materialsDelivered = materialShipmentStatus == ShipmentStatus.DELIVERED;
+        return new PreparationSnapshot(
+                facilityContractStatus,
+                travelArrangementStatus,
+                materialShipmentStatus,
+                facilitySecured,
+                travelConfirmed,
+                materialsDelivered,
+                facilitySecured && travelConfirmed && materialsDelivered
+        );
+    }
+
+    private TravelArrangementStatus aggregateTravelStatus(List<TravelArrangement> arrangements) {
+        if (arrangements.isEmpty()) {
+            return null;
+        }
+        List<TravelArrangement> activeArrangements = arrangements.stream()
+                .filter(arrangement -> arrangement.getTravelArrangementStatus() != TravelArrangementStatus.CANCELLED)
+                .toList();
+        if (activeArrangements.isEmpty()) {
+            return TravelArrangementStatus.CANCELLED;
+        }
+        if (activeArrangements.stream()
+                .allMatch(arrangement -> arrangement.getTravelArrangementStatus() == TravelArrangementStatus.CONFIRMED)) {
+            return TravelArrangementStatus.CONFIRMED;
+        }
+        return TravelArrangementStatus.BOOKED;
+    }
+
+    private ShipmentStatus aggregateMaterialStatus(List<MaterialRequest> requests) {
+        if (requests.isEmpty()) {
+            return null;
+        }
+        if (requests.stream().allMatch(request -> request.getShipmentStatus() == ShipmentStatus.DELIVERED)) {
+            return ShipmentStatus.DELIVERED;
+        }
+        if (requests.stream().anyMatch(request -> request.getShipmentStatus() == ShipmentStatus.SHIPPED)) {
+            return ShipmentStatus.SHIPPED;
+        }
+        if (requests.stream().anyMatch(request -> request.getShipmentStatus() == ShipmentStatus.PACKED)) {
+            return ShipmentStatus.PACKED;
+        }
+        return ShipmentStatus.REQUESTED;
     }
 
     @Transactional(readOnly = true)
@@ -223,7 +325,7 @@ public class SeminarService {
         return (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (currentRole != UserRole.ADMIN) {
-                predicates.add(root.get("status").in(FINAL_SEMINAR_STATUSES));
+                predicates.add(root.get("status").in(VISIBLE_SEMINAR_STATUSES));
             }
             if (status != null) {
                 predicates.add(builder.equal(root.get("status"), status));
@@ -242,7 +344,7 @@ public class SeminarService {
         if (requireCurrentUser().getRole() == UserRole.ADMIN) {
             return;
         }
-        if (!FINAL_SEMINAR_STATUSES.contains(seminar.getStatus())) {
+        if (!VISIBLE_SEMINAR_STATUSES.contains(seminar.getStatus())) {
             throw new ResourceNotFoundException("Seminar not found: " + seminar.getId());
         }
     }
@@ -312,9 +414,33 @@ public class SeminarService {
                 seminar.getCity(),
                 seminar.getAnticipatedRegistrants(),
                 seminar.getStatus(),
+                toChecklistResponse(buildPreparationSnapshot(seminar.getId())),
                 seminar.getNote(),
                 seminar.getBookingCreatedDateTime()
         );
+    }
+
+    private SeminarPreparationChecklistResponse toChecklistResponse(PreparationSnapshot snapshot) {
+        return new SeminarPreparationChecklistResponse(
+                snapshot.facilityContractStatus(),
+                snapshot.travelArrangementStatus(),
+                snapshot.materialShipmentStatus(),
+                snapshot.facilitySecured(),
+                snapshot.travelConfirmed(),
+                snapshot.materialsDelivered(),
+                snapshot.readyForSeminar()
+        );
+    }
+
+    private record PreparationSnapshot(
+            ContractStatus facilityContractStatus,
+            TravelArrangementStatus travelArrangementStatus,
+            ShipmentStatus materialShipmentStatus,
+            boolean facilitySecured,
+            boolean travelConfirmed,
+            boolean materialsDelivered,
+            boolean readyForSeminar
+    ) {
     }
 
     private CalculatedMaterialRequirementResponse toCalculatedMaterial(

@@ -48,7 +48,9 @@ public class TravelArrangementService {
         Seminar seminar = verifySeminarCoordinator(request.getSeminarId());
         TravelArrangement arrangement = TravelArrangementMapper.toEntity(request);
         validateArrangementData(arrangement, seminar);
-        return TravelArrangementMapper.toResponse(travelArrangementRepository.save(arrangement));
+        TravelArrangement savedArrangement = travelArrangementRepository.saveAndFlush(arrangement);
+        seminarService.reevaluatePreparationStatus(savedArrangement.getSeminarId());
+        return TravelArrangementMapper.toResponse(savedArrangement);
     }
 
     @Transactional
@@ -61,6 +63,8 @@ public class TravelArrangementService {
 
         TravelArrangementMapper.updateEntityFromRequest(request, arrangement);
         validateArrangementData(arrangement, seminar);
+        travelArrangementRepository.flush();
+        seminarService.reevaluatePreparationStatus(arrangement.getSeminarId());
         return TravelArrangementMapper.toResponse(arrangement);
     }
 
@@ -76,14 +80,19 @@ public class TravelArrangementService {
             arrangement.setConfirmationSentDatetime(LocalDateTime.now());
         }
 
+        travelArrangementRepository.flush();
+        seminarService.reevaluatePreparationStatus(arrangement.getSeminarId());
         return TravelArrangementMapper.toResponse(arrangement);
     }
 
     @Transactional
     public void deleteTravelArrangement(Long travelArrangementId) {
         TravelArrangement arrangement = findArrangement(travelArrangementId);
+        Long seminarId = arrangement.getSeminarId();
         verifySeminarCoordinator(arrangement.getSeminarId());
         travelArrangementRepository.delete(arrangement);
+        travelArrangementRepository.flush();
+        seminarService.reevaluatePreparationStatus(seminarId);
     }
 
     @Transactional(readOnly = true)

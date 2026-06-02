@@ -3,6 +3,7 @@ import {
   Building2,
   CheckCircle2,
   ChevronRight,
+  Clock,
   FileSignature,
   FileText,
   Lock,
@@ -576,6 +577,14 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
       setErrorMsg(null)
       await api.confirmDelivered(requestId, note || 'Vật tư đã nhận đầy đủ tại địa điểm tổ chức.')
       setSuccessMsg('Xác nhận nhận vật tư tại địa điểm tổ chức seminar thành công!')
+
+      addNotification({
+        title: 'Vật tư đã DELIVERED',
+        body: `Bạn đã xác nhận nhận vật tư của Seminar "${seminar?.seminarName || 'đào tạo'}" tại địa điểm tổ chức.`,
+        type: 'material',
+        role: 'LOGISTICS_COORDINATOR',
+        link: { tab: 'DETAIL', seminarId: seminar?.id }
+      })
       
       // Dispatch notification back to MATERIALS_STAFF
       addNotification({
@@ -610,15 +619,9 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
     isCoordinatorRole && seminar.coordinatorId === user.userId && !isOverdueLocked
   const isConsultant = user?.role === 'CONSULTANT'
   const isMaterialsStaff = user?.role === 'MATERIALS_STAFF'
-  const canAccessMaterialsTab = isMaterialsStaff || isCoordinatorRole
+  const canAccessMaterialsTab = isMaterialsStaff || isCoordinatorRole || user?.role === 'ADMIN'
   const isFacilityContractApproved = reservation?.contractStatus === 'APPROVED'
-  const activeTravelArrangements = travelList.filter((travel) => getTravelStatus(travel) !== 'CANCELLED')
-  const isTravelConfirmed = activeTravelArrangements.length > 0 &&
-    activeTravelArrangements.every((travel) => getTravelStatus(travel) === 'CONFIRMED')
   const facilityContractRequiredReason = 'Cần duyệt hợp đồng địa điểm trước khi mở bước này.'
-  const travelRequiredReason = !isFacilityContractApproved
-    ? facilityContractRequiredReason
-    : 'Cần hoàn tất và xác nhận lịch trình di chuyển trước khi mở bước này.'
   const tabAccess: Record<DetailTab, { enabled: boolean; reason?: string }> = {
     INFO: { enabled: true },
     CONTRACT: { enabled: true },
@@ -627,8 +630,8 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
       reason: facilityContractRequiredReason,
     },
     MATERIALS: {
-      enabled: canAccessMaterialsTab && isFacilityContractApproved && isTravelConfirmed,
-      reason: canAccessMaterialsTab ? travelRequiredReason : 'Vai trò hiện tại không có quyền xem tab vật tư.',
+      enabled: canAccessMaterialsTab && isFacilityContractApproved,
+      reason: canAccessMaterialsTab ? facilityContractRequiredReason : 'Vai trò hiện tại không có quyền xem tab vật tư.',
     },
     REPORT: {
       enabled: isFacilityContractApproved,
@@ -854,6 +857,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                 <DetailField label="Học viên dự kiến" value={`${seminar.anticipatedRegistrants} người`} />
                 <DetailField label="Ghi chú booking" value={seminar.note || 'Không có ghi chú'} wide />
               </div>
+              <PreparationChecklistCard seminar={seminar} />
             </div>
           )}
 
@@ -950,11 +954,11 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                       <div className="space-y-3">
                         {facilities.length > 0 ? (
                           facilities.map((f) => (
-                            <div key={f.facilityId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between border border-slate-100 p-4 rounded-xl bg-white gap-4 shadow-sm hover:shadow-md transition">
-                              <div>
+                            <div key={f.facilityId} className="flex flex-col border border-slate-100 p-4 rounded-xl bg-white gap-4 shadow-sm hover:shadow-md transition lg:flex-row lg:items-center lg:justify-between">
+                              <div className="min-w-0 flex-1">
                                 <h5 className="text-sm font-extrabold text-[#0B3970]">{f.facilityName}</h5>
-                                <p className="text-xs text-slate-400 mt-1">{f.address}</p>
-                                <div className="flex flex-wrap items-center gap-3 mt-2">
+                                <p className="mt-1 text-xs font-semibold text-slate-500">{f.address}</p>
+                                <div className="mt-2 flex flex-wrap items-center gap-3">
                                   <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
                                     Sức chứa: {f.maxCapacity} người
                                   </span>
@@ -963,6 +967,25 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                                   </span>
                                 </div>
                               </div>
+
+                              <div className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 lg:w-72">
+                                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Sales phụ trách</p>
+                                <div className="mt-2 space-y-1.5 text-xs font-bold text-slate-600">
+                                  <p className="flex items-center gap-2">
+                                    <UserRound className="h-3.5 w-3.5 shrink-0 text-[#126CB0]" />
+                                    <span className="truncate">{f.salesManagerName || 'Chưa cập nhật tên sales'}</span>
+                                  </p>
+                                  <p className="flex items-center gap-2">
+                                    <Phone className="h-3.5 w-3.5 shrink-0 text-[#126CB0]" />
+                                    <span className="truncate">{f.salesManagerPhone || 'Chưa cập nhật SĐT'}</span>
+                                  </p>
+                                  <p className="flex items-center gap-2">
+                                    <Mail className="h-3.5 w-3.5 shrink-0 text-[#126CB0]" />
+                                    <span className="truncate">{f.salesManagerEmail || 'Chưa cập nhật email'}</span>
+                                  </p>
+                                </div>
+                              </div>
+
                               <button
                                 type="button"
                                 onClick={() => handleSelectHotel(f.facilityId)}
@@ -1710,7 +1733,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                                 onClick={() => handleUpdateShipment(m.id, 'PACKED')}
                                 className="rounded bg-amber-500 px-3 py-1.5 text-[11px] font-black text-white hover:bg-amber-600 transition shadow-sm"
                               >
-                                Xác nhận đã đóng gói (PACKED)
+                                Cập nhật: Đã đóng gói (PACKED)
                               </button>
                             )}
                             {m.shipmentStatus === 'PACKED' && (
@@ -1719,7 +1742,7 @@ export function SeminarDetailPage({ seminarId, onBack }: SeminarDetailPageProps)
                                 onClick={() => handleUpdateShipment(m.id, 'SHIPPED')}
                                 className="rounded bg-indigo-500 px-3 py-1.5 text-[11px] font-black text-white hover:bg-indigo-600 transition shadow-sm"
                               >
-                                Bàn giao đơn vị vận chuyển (SHIPPED)
+                                Cập nhật: Đang vận chuyển (SHIPPED)
                               </button>
                             )}
                             {m.shipmentStatus === 'SHIPPED' && (
@@ -1938,6 +1961,88 @@ function DetailField({ label, value, wide }: DetailFieldProps) {
       <div className="mt-1.5 min-h-5 text-sm font-bold text-[#18395F]">{value}</div>
     </div>
   )
+}
+
+function PreparationChecklistCard({ seminar }: { seminar: SeminarResponse }) {
+  const checklist = seminar.preparationChecklist
+  const rows = [
+    {
+      label: 'Facility contract',
+      value: facilityContractStatusLabel(checklist?.facilityContractStatus),
+      done: Boolean(checklist?.facilitySecured),
+    },
+    {
+      label: 'Travel arrangement',
+      value: preparationTravelStatusLabel(checklist?.travelArrangementStatus),
+      done: Boolean(checklist?.travelConfirmed),
+    },
+    {
+      label: 'Material shipment',
+      value: materialShipmentStatusLabel(checklist?.materialShipmentStatus),
+      done: Boolean(checklist?.materialsDelivered),
+    },
+  ]
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-black text-[#0B3970]">Preparation checklist</h3>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            Macro status lấy từ seminar, sub-status lấy trực tiếp từ các bảng con.
+          </p>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wide ${checklist?.readyForSeminar ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+          {checklist?.readyForSeminar ? 'Ready' : 'Preparing'}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-xl border border-slate-200 bg-[#F8FBFF] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{row.label}</p>
+              {row.done ? (
+                <CheckCircle2 className="h-4 w-4 text-teal-600" />
+              ) : (
+                <Clock className="h-4 w-4 text-amber-500" />
+              )}
+            </div>
+            <p className={`mt-2 text-sm font-black ${row.done ? 'text-teal-700' : 'text-[#18395F]'}`}>
+              {row.value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function facilityContractStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    PENDING_NEGOTIATE: 'Đang thương lượng',
+    APPROVED: 'Đã ký duyệt',
+    REJECTED: 'Bị từ chối',
+  }
+  return status ? labels[status] || status : 'Chưa tạo hợp đồng'
+}
+
+function preparationTravelStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    BOOKED: 'Chờ consultant xác nhận',
+    CONFIRMED: 'Đã xác nhận',
+    CANCELLED: 'Đã hủy',
+  }
+  return status ? labels[status] || status : 'Chưa có lịch trình'
+}
+
+function materialShipmentStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    REQUESTED: 'Đã yêu cầu',
+    PACKED: 'Đã đóng gói',
+    SHIPPED: 'Đang vận chuyển',
+    DELIVERED: 'Đã giao nhận',
+  }
+  return status ? labels[status] || status : 'Chưa yêu cầu vật tư'
 }
 
 type FacilityInputProps = {
@@ -2176,8 +2281,7 @@ function materialRequestErrorMessage(message?: string) {
 }
 
 function isSeminarOverdueLocked(seminar: SeminarResponse) {
-  return seminar.status === 'OVERDUE' ||
-    (seminar.startDate < getTodayInputValue() && !isClosedSeminarStatus(seminar.status))
+  return seminar.startDate < getTodayInputValue() && !isClosedSeminarStatus(seminar.status)
 }
 
 function isClosedSeminarStatus(status: string) {
@@ -2201,17 +2305,15 @@ function seminarStatusStyle(seminar: SeminarResponse) {
 const statusLabels: Record<string, string> = {
   PENDING_LOGISTICS: 'Chờ Hậu Cần',
   FACILITY_SECURED: 'Đã Chốt Địa Điểm',
-  TRAVEL_CONFIRMED: 'Đã Chốt Di Chuyển',
+  IN_PROGRESS: 'Đang Chuẩn Bị',
   READY_FOR_SEMINAR: 'Sẵn Sàng Tổ Chức',
   CANCELLED: 'Đã Hủy',
-  OVERDUE: 'Quá Hạn Xử Lý',
 }
 
 const statusStyles: Record<string, string> = {
   PENDING_LOGISTICS: 'bg-amber-50 text-amber-700 border-amber-200',
   FACILITY_SECURED: 'bg-blue-50 text-blue-700 border-blue-200',
-  TRAVEL_CONFIRMED: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  IN_PROGRESS: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   READY_FOR_SEMINAR: 'bg-teal-50 text-teal-700 border-teal-200',
   CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200',
-  OVERDUE: 'bg-rose-50 text-rose-700 border-rose-200',
 }

@@ -23,6 +23,7 @@ public record SeminarResponse(
         String city,
         Integer anticipatedRegistrants,
         SeminarStatus status,
+        SeminarPreparationChecklistResponse preparationChecklist,
         String note,
         LocalDateTime bookingCreatedDateTime
 ) {
